@@ -249,24 +249,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 										)}
 									</Button>
 								</div>
-
-								{/* Demo Credentials */}
-								<div className="mt-6 p-4 bg-gray-50 rounded-lg">
-									<p className="text-sm font-medium text-gray-700 mb-2">Demo Credentials:</p>
-									<div className="text-xs text-gray-600 space-y-1">
-										{selectedRole === 'superadmin' ? (
-											<p><strong>Super Admin:</strong> superadmin / super123</p>
-										) : selectedRole === 'receptionist' ? (
-											<p><strong>Receptionist:</strong> receptionist / admin123</p>
-										) : (
-											<div>
-												<p><strong>Prof. Mansouri:</strong> prof.mansouri / prof123</p>
-												<p><strong>Prof. Bedaida:</strong> prof.bedaida / prof123</p>
-												<p><strong>Prof. Touati:</strong> prof.touati / prof123</p>
-											</div>
-										)}
-									</div>
-								</div>
 							</form>
 						)}
 					</CardContent>

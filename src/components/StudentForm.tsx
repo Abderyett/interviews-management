@@ -28,11 +28,11 @@ export const StudentForm: React.FC<StudentFormProps> = ({ onAddStudent, disabled
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!name.trim() || !selectedProgram.trim()) return;
+		if (!name.trim()) return;
 		
 		onAddStudent({
 			name: name.trim(),
-			studentId: selectedProgram.trim()
+			studentId: selectedProgram.trim() || 'No Program'
 		});
 		
 		setName('');
@@ -106,7 +106,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({ onAddStudent, disabled
 				
 				<button
 					type='submit'
-					disabled={!name.trim() || !selectedProgram.trim() || disabled}
+					disabled={!name.trim() || disabled}
 					className='inline-flex items-center justify-center rounded-md font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed'>
 					<Plus className='h-4 w-4 mr-2' />
 					Add Student

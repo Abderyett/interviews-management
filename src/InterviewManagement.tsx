@@ -6,7 +6,6 @@ import {
 	AlertCircle,
 	Building,
 	Eye,
-	Calendar,
 	Trash2,
 	X,
 	GraduationCap,
@@ -47,7 +46,7 @@ interface Professor {
 	name: string;
 	room: string;
 	floor: string;
-	status: 'available' | 'busy' | 'unavailable';
+	status: 'available' | 'busy' | 'unavailable' | 'offline';
 	currentStudent: QueueEntry | null;
 	interviewStartTime: Date | null;
 }
@@ -114,14 +113,6 @@ const Button = ({
 	);
 };
 
-const Input = ({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) => {
-	return (
-		<input
-			className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-			{...props}
-		/>
-	);
-};
 
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
 	<div className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`}>{children}</div>
@@ -290,12 +281,12 @@ const InterviewQueueSystem = () => {
 			// Transform and update data
 			const newDateData: DateData = {
 				registeredStudents:
-					studentsResult.data?.map((s: any) => ({
+					studentsResult.data?.map((s) => ({
 						studentId: s.student_id,
 						name: s.name,
 					})) || [],
 				waitingQueue:
-					queueResult.data?.map((q: any) => ({
+					queueResult.data?.map((q) => ({
 						studentId: q.student_id,
 						name: q.name,
 						queueNumber: q.queue_number,
@@ -304,7 +295,7 @@ const InterviewQueueSystem = () => {
 						assignedRoom: q.assigned_room,
 					})) || [],
 				completedInterviews:
-					completedResult.data?.map((c: any) => ({
+					completedResult.data?.map((c) => ({
 						studentId: c.student_id,
 						name: c.name,
 						queueNumber: c.queue_number,
@@ -317,10 +308,10 @@ const InterviewQueueSystem = () => {
 						room: c.room,
 					})) || [],
 				currentNumber: queueResult.data?.length
-					? Math.max(...queueResult.data.map((q: any) => q.queue_number)) + 1
+					? Math.max(...queueResult.data.map((q) => q.queue_number)) + 1
 					: 1,
 				professors:
-					professorResult.data?.map((ps: any) => ({
+					professorResult.data?.map((ps) => ({
 						id: ps.professor_id,
 						name: ps.name,
 						room: ps.room,
@@ -623,6 +614,11 @@ const InterviewQueueSystem = () => {
 						),
 					},
 				}));
+
+				// Trigger data refresh to ensure real-time updates for all users
+				setTimeout(() => {
+					loadDateData();
+				}, 500);
 			} catch (error) {
 				console.error('Error completing interview:', error);
 				setError(`Failed to complete interview: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -921,6 +917,78 @@ const InterviewQueueSystem = () => {
 		[currentData, selectedDate]
 	);
 
+	// Edit student - update student information
+	const editStudent = useCallback(
+		async (oldStudent: Student, newStudent: Student) => {
+			try {
+				setError(null);
+
+				// Update in database
+				const { error } = await supabase
+					.from('students')
+					.update({
+						name: newStudent.name,
+						student_id: newStudent.studentId
+					})
+					.eq('student_id', oldStudent.studentId)
+					.eq('interview_date', selectedDate);
+
+				if (error) throw error;
+
+				// Update in interview_queue if student is in queue
+				const { error: queueError } = await supabase
+					.from('interview_queue')
+					.update({
+						name: newStudent.name,
+						student_id: newStudent.studentId
+					})
+					.eq('student_id', oldStudent.studentId)
+					.eq('interview_date', selectedDate);
+
+				if (queueError) console.warn('Queue update error:', queueError);
+
+				// Update in completed_interviews if student has completed interviews
+				const { error: completedError } = await supabase
+					.from('completed_interviews')
+					.update({
+						name: newStudent.name,
+						student_id: newStudent.studentId
+					})
+					.eq('student_id', oldStudent.studentId)
+					.eq('interview_date', selectedDate);
+
+				if (completedError) console.warn('Completed interviews update error:', completedError);
+
+				console.log('Successfully updated student:', oldStudent.studentId, 'to', newStudent);
+
+				// Update local state
+				setDateData((prev) => ({
+					...prev,
+					[selectedDate]: {
+						...currentData,
+						registeredStudents: currentData.registeredStudents.map((s: Student) =>
+							s.studentId === oldStudent.studentId ? newStudent : s
+						),
+						waitingQueue: currentData.waitingQueue.map((q: QueueEntry) =>
+							q.studentId === oldStudent.studentId 
+								? { ...q, name: newStudent.name, studentId: newStudent.studentId }
+								: q
+						),
+						completedInterviews: currentData.completedInterviews.map((c: CompletedInterview) =>
+							c.studentId === oldStudent.studentId 
+								? { ...c, name: newStudent.name, studentId: newStudent.studentId }
+								: c
+						),
+					},
+				}));
+			} catch (error) {
+				console.error('Error updating student:', error);
+				setError(`Failed to update student: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+		},
+		[currentData, selectedDate]
+	);
+
 	// Helper functions for styling - memoized
 	const getStatusColor = useMemo(
 		() => (status: string) => {
@@ -929,6 +997,8 @@ const InterviewQueueSystem = () => {
 					return 'border-green-200 bg-green-50';
 				case 'busy':
 					return 'border-orange-200 bg-orange-50';
+				case 'offline':
+					return 'border-gray-300 bg-gray-100';
 				default:
 					return 'border-gray-200 bg-gray-50';
 			}
@@ -944,6 +1014,8 @@ const InterviewQueueSystem = () => {
 						return 'default';
 					case 'busy':
 						return 'secondary';
+					case 'offline':
+						return 'outline';
 					default:
 						return 'outline';
 				}
@@ -1142,6 +1214,7 @@ const InterviewQueueSystem = () => {
 							waitingQueue={currentData.waitingQueue}
 							onAddToQueue={isReadOnly ? () => {} : addStudentToQueue}
 							onDeleteStudent={isReadOnly ? () => {} : (student) => setDeleteModal({ show: true, student })}
+							onEditStudent={isReadOnly ? undefined : editStudent}
 							isLoading={isLoading}
 							readOnly={isReadOnly}
 						/>
@@ -1263,34 +1336,51 @@ const InterviewQueueSystem = () => {
 						</CardHeader>
 						<CardContent>
 							<div className='space-y-3'>
-								{currentData.professors.map((professor: Professor) => (
-									<div
-										key={professor.id}
-										className={`border rounded-lg p-4 transition-all duration-200 ${getStatusColor(
-											professor.status
-										)}`}>
-										<div className='flex justify-between items-start mb-2'>
-											<div>
-												<p className='font-medium'>{professor.name}</p>
-												<p className='text-sm text-muted-foreground'>{professor.room}</p>
+								{currentData.professors.map((professor: Professor) => {
+									// Determine actual display status based on login state
+									let displayStatus: Professor['status'] = professor.status;
+									if (professor.status === 'available' && professor.id !== professorId) {
+										// Professor is available but not logged in - show as offline
+										displayStatus = 'offline';
+									}
+									
+									return (
+										<div
+											key={professor.id}
+											className={`border rounded-lg p-4 transition-all duration-200 ${getStatusColor(
+												displayStatus
+											)}`}>
+											<div className='flex justify-between items-start mb-2'>
+												<div>
+													<p className='font-medium'>{professor.name}</p>
+													<p className='text-sm text-muted-foreground'>{professor.room}</p>
+													{professor.id === professorId && (
+														<p className='text-xs text-green-600 font-medium'>● Currently Logged In</p>
+													)}
+												</div>
+												<Badge variant={getStatusVariant(displayStatus)}>
+													{displayStatus === 'offline' ? 'offline' : displayStatus}
+												</Badge>
 											</div>
-											<Badge variant={getStatusVariant(professor.status)}>{professor.status}</Badge>
-										</div>
-										{professor.currentStudent && (
-											<div>
-												<p className='text-sm mb-1'>
-													Interviewing: #{professor.currentStudent.queueNumber} -{' '}
-													{professor.currentStudent.name}
-												</p>
-												{professor.interviewStartTime && (
-													<p className='text-xs text-muted-foreground'>
-														Started: {professor.interviewStartTime.toLocaleTimeString()}
+											{professor.currentStudent && (
+												<div>
+													<p className='text-sm mb-1'>
+														Interviewing: #{professor.currentStudent.queueNumber} -{' '}
+														{professor.currentStudent.name}
 													</p>
-												)}
-											</div>
-										)}
-									</div>
-								))}
+													{professor.interviewStartTime && (
+														<p className='text-xs text-muted-foreground'>
+															Started: {professor.interviewStartTime.toLocaleTimeString()}
+														</p>
+													)}
+												</div>
+											)}
+											{displayStatus === 'offline' && !professor.currentStudent && (
+												<p className='text-xs text-muted-foreground'>Professor not logged in</p>
+											)}
+										</div>
+									);
+								})}
 							</div>
 						</CardContent>
 					</Card>
@@ -1428,33 +1518,47 @@ const InterviewQueueSystem = () => {
 						<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 							{currentData.professors
 								.filter((p: Professor) => p.id !== professorId)
-								.map((prof: Professor) => (
-									<div
-										key={prof.id}
-										className={`border rounded-lg p-4 transition-all duration-200 ${getStatusColor(
-											prof.status
-										)}`}>
-										<div className='flex justify-between items-start mb-2'>
-											<div>
-												<p className='font-medium'>{prof.name}</p>
-												<p className='text-sm text-muted-foreground'>{prof.room}</p>
+								.map((prof: Professor) => {
+									// Apply same offline logic for other professors
+									let displayStatus: Professor['status'] = prof.status;
+									if (prof.status === 'available') {
+										// Other professors show as offline when not the current logged in professor
+										displayStatus = 'offline';
+									}
+									
+									return (
+										<div
+											key={prof.id}
+											className={`border rounded-lg p-4 transition-all duration-200 ${getStatusColor(
+												displayStatus
+											)}`}>
+											<div className='flex justify-between items-start mb-2'>
+												<div>
+													<p className='font-medium'>{prof.name}</p>
+													<p className='text-sm text-muted-foreground'>{prof.room}</p>
+												</div>
+												<Badge variant={getStatusVariant(displayStatus)}>
+													{displayStatus === 'offline' ? 'offline' : displayStatus}
+												</Badge>
 											</div>
-											<Badge variant={getStatusVariant(prof.status)}>{prof.status}</Badge>
-										</div>
-										{prof.currentStudent && (
-											<div>
-												<p className='text-sm mb-1'>
-													Interviewing: #{prof.currentStudent.queueNumber} - {prof.currentStudent.name}
-												</p>
-												{prof.interviewStartTime && (
-													<p className='text-xs text-muted-foreground'>
-														Started: {prof.interviewStartTime.toLocaleTimeString()}
+											{prof.currentStudent && (
+												<div>
+													<p className='text-sm mb-1'>
+														Interviewing: #{prof.currentStudent.queueNumber} - {prof.currentStudent.name}
 													</p>
-												)}
-											</div>
-										)}
-									</div>
-								))}
+													{prof.interviewStartTime && (
+														<p className='text-xs text-muted-foreground'>
+															Started: {prof.interviewStartTime.toLocaleTimeString()}
+														</p>
+													)}
+												</div>
+											)}
+											{displayStatus === 'offline' && !prof.currentStudent && (
+												<p className='text-xs text-muted-foreground'>Professor not logged in</p>
+											)}
+										</div>
+									);
+								})}
 						</div>
 					</CardContent>
 				</Card>

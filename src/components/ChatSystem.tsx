@@ -82,7 +82,7 @@ export const ChatSystem: React.FC<ChatSystemProps> = ({ currentUser }) => {
 			console.log('🔄 Initializing user:', currentUser);
 			try {
 				// Test if chat_users table exists
-				const { data: testData, error: testError } = await supabase
+				const { error: testError } = await supabase
 					.from('chat_users')
 					.select('count', { count: 'exact', head: true });
 

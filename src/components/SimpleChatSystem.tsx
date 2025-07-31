@@ -13,12 +13,6 @@ interface Message {
 	recipient?: string;
 }
 
-interface ChatUser {
-	id: string;
-	name: string;
-	role: 'superadmin' | 'receptionist' | 'professor';
-	online: boolean;
-}
 
 interface ChatSystemProps {
 	currentUser: {
@@ -72,7 +66,6 @@ export const SimpleChatSystem: React.FC<ChatSystemProps> = ({ currentUser }) => 
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [newMessage, setNewMessage] = useState('');
 	const [selectedChat, setSelectedChat] = useState<'all' | string>('all');
-	const [onlineUsers, setOnlineUsers] = useState<ChatUser[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string>('');
 	const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -253,8 +246,7 @@ export const SimpleChatSystem: React.FC<ChatSystemProps> = ({ currentUser }) => 
 					<Button
 						onClick={refreshMessages}
 						variant="ghost"
-						size="sm"
-						title="Refresh messages">
+						size="sm">
 						<RefreshCw className="h-4 w-4" />
 					</Button>
 					<Button
