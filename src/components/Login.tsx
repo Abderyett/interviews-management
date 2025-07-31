@@ -1,0 +1,277 @@
+import React, { useState } from 'react';
+import { GraduationCap, User, LogIn } from 'lucide-react';
+
+interface LoginProps {
+	onLogin: (role: 'receptionist' | 'professor' | 'superadmin', professorId?: number) => void;
+}
+
+const Button = ({
+	children,
+	onClick,
+	variant = 'default',
+	disabled = false,
+	className = '',
+	type = 'button',
+}: {
+	children: React.ReactNode;
+	onClick?: () => void;
+	variant?: 'default' | 'outline';
+	disabled?: boolean;
+	className?: string;
+	type?: 'button' | 'submit';
+}) => {
+	const baseClasses =
+		'inline-flex items-center justify-center rounded-md font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2';
+
+	const variants = {
+		default: 'bg-indigo-600 text-white hover:bg-indigo-700',
+		outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+	};
+
+	return (
+		<button
+			type={type}
+			className={`${baseClasses} ${variants[variant]} ${className}`}
+			onClick={onClick}
+			disabled={disabled}>
+			{children}
+		</button>
+	);
+};
+
+const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+	<div className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`}>{children}</div>
+);
+
+const CardHeader = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+	<div className={`flex flex-col space-y-1.5 p-6 ${className}`}>{children}</div>
+);
+
+const CardTitle = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+	<h3 className={`text-2xl font-semibold leading-none tracking-tight ${className}`}>{children}</h3>
+);
+
+const CardContent = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+	<div className={`p-6 pt-0 ${className}`}>{children}</div>
+);
+
+export const Login: React.FC<LoginProps> = ({ onLogin }) => {
+	const [selectedRole, setSelectedRole] = useState<'receptionist' | 'professor' | 'superadmin' | null>(null);
+	const [username, setUsername] = useState('');
+	const [password, setPassword] = useState('');
+	const [error, setError] = useState('');
+	const [isLoading, setIsLoading] = useState(false);
+
+	// Mock user credentials
+	const users = {
+		superadmin: {
+			username: 'superadmin',
+			password: 'super123'
+		},
+		receptionist: {
+			username: 'receptionist',
+			password: 'admin123'
+		},
+		professors: [
+			{ id: 1, username: 'prof.mansouri', password: 'prof123', name: 'Prof. Mansouri', room: 'Room 7' },
+			{ id: 2, username: 'prof.bedaida', password: 'prof123', name: 'Prof. Bedaida', room: 'Room 8' },
+			{ id: 3, username: 'prof.touati', password: 'prof123', name: 'Prof. Touati', room: 'Room 9' },
+		]
+	};
+
+	const handleLogin = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setError('');
+		setIsLoading(true);
+
+		// Simulate API delay
+		await new Promise(resolve => setTimeout(resolve, 1000));
+
+		try {
+			if (selectedRole === 'superadmin') {
+				if (username === users.superadmin.username && password === users.superadmin.password) {
+					onLogin('superadmin');
+				} else {
+					throw new Error('Invalid super admin credentials');
+				}
+			} else if (selectedRole === 'receptionist') {
+				if (username === users.receptionist.username && password === users.receptionist.password) {
+					onLogin('receptionist');
+				} else {
+					throw new Error('Invalid receptionist credentials');
+				}
+			} else if (selectedRole === 'professor') {
+				const professor = users.professors.find(
+					p => p.username === username && p.password === password
+				);
+				if (professor) {
+					onLogin('professor', professor.id);
+				} else {
+					throw new Error('Invalid professor credentials');
+				}
+			}
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'Login failed');
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	return (
+		<div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center p-4">
+			<div className="w-full max-w-md">
+				{/* Header */}
+				<div className="text-center mb-8">
+					<div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+						<GraduationCap className="h-8 w-8 text-white" />
+					</div>
+					<h1 className="text-3xl font-bold text-gray-900">Interview Hub</h1>
+					<p className="text-gray-600 mt-2">University Management System</p>
+				</div>
+
+				<Card>
+					<CardHeader>
+						<CardTitle className="text-center">Login</CardTitle>
+					</CardHeader>
+					<CardContent>
+						{!selectedRole ? (
+							<div className="space-y-4">
+								<p className="text-center text-gray-600 mb-6">Select your role to continue</p>
+								
+								<Button
+									onClick={() => setSelectedRole('superadmin')}
+									variant="outline"
+									className="w-full justify-start h-16 text-left">
+									<GraduationCap className="h-6 w-6 mr-4 text-purple-600" />
+									<div>
+										<div className="font-semibold text-purple-600">Super Admin</div>
+										<div className="text-sm text-gray-500">Complete system administration</div>
+									</div>
+								</Button>
+
+								<Button
+									onClick={() => setSelectedRole('receptionist')}
+									variant="outline"
+									className="w-full justify-start h-16 text-left">
+									<User className="h-6 w-6 mr-4" />
+									<div>
+										<div className="font-semibold">Receptionist</div>
+										<div className="text-sm text-gray-500">Manage students and interviews</div>
+									</div>
+								</Button>
+
+								<Button
+									onClick={() => setSelectedRole('professor')}
+									variant="outline"
+									className="w-full justify-start h-16 text-left">
+									<GraduationCap className="h-6 w-6 mr-4" />
+									<div>
+										<div className="font-semibold">Professor</div>
+										<div className="text-sm text-gray-500">View dashboard and room status</div>
+									</div>
+								</Button>
+							</div>
+						) : (
+							<form onSubmit={handleLogin} className="space-y-4">
+								<div className="text-center mb-4">
+									<div className="inline-flex items-center gap-2 text-lg font-semibold">
+										{selectedRole === 'superadmin' ? (
+											<><GraduationCap className="h-5 w-5 text-purple-600" /> Super Admin Login</>
+										) : selectedRole === 'receptionist' ? (
+											<><User className="h-5 w-5" /> Receptionist Login</>
+										) : (
+											<><GraduationCap className="h-5 w-5" /> Professor Login</>
+										)}
+									</div>
+								</div>
+
+								{error && (
+									<div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+										{error}
+									</div>
+								)}
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-2">
+										Username
+									</label>
+									<input
+										type="text"
+										value={username}
+										onChange={(e) => setUsername(e.target.value)}
+										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+										placeholder={selectedRole === 'receptionist' ? 'receptionist' : 'prof.username'}
+										required
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-2">
+										Password
+									</label>
+									<input
+										type="password"
+										value={password}
+										onChange={(e) => setPassword(e.target.value)}
+										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+										placeholder="Enter your password"
+										required
+									/>
+								</div>
+
+								<div className="flex gap-3">
+									<Button
+										type="button"
+										variant="outline"
+										onClick={() => {
+											setSelectedRole(null);
+											setUsername('');
+											setPassword('');
+											setError('');
+										}}
+										className="flex-1">
+										Back
+									</Button>
+									<Button
+										type="submit"
+										disabled={isLoading}
+										className="flex-1">
+										{isLoading ? (
+											<>
+												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+												Signing in...
+											</>
+										) : (
+											<>
+												<LogIn className="h-4 w-4 mr-2" />
+												Sign In
+											</>
+										)}
+									</Button>
+								</div>
+
+								{/* Demo Credentials */}
+								<div className="mt-6 p-4 bg-gray-50 rounded-lg">
+									<p className="text-sm font-medium text-gray-700 mb-2">Demo Credentials:</p>
+									<div className="text-xs text-gray-600 space-y-1">
+										{selectedRole === 'superadmin' ? (
+											<p><strong>Super Admin:</strong> superadmin / super123</p>
+										) : selectedRole === 'receptionist' ? (
+											<p><strong>Receptionist:</strong> receptionist / admin123</p>
+										) : (
+											<div>
+												<p><strong>Prof. Mansouri:</strong> prof.mansouri / prof123</p>
+												<p><strong>Prof. Bedaida:</strong> prof.bedaida / prof123</p>
+												<p><strong>Prof. Touati:</strong> prof.touati / prof123</p>
+											</div>
+										)}
+									</div>
+								</div>
+							</form>
+						)}
+					</CardContent>
+				</Card>
+			</div>
+		</div>
+	);
+};

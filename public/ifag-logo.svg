@@ -1,0 +1,7 @@
+<svg width="1200" height="600" viewBox="0 0 1200 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- ifag text -->
+  <text x="600" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="280" font-weight="bold" fill="#E53E3E">ifag</text>
+  
+  <!-- Higher Institute text -->
+  <text x="600" y="450" text-anchor="middle" font-family="Arial, sans-serif" font-size="80" font-weight="500" fill="#2D3748">Higher Institute</text>
+</svg>
