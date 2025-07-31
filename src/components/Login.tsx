@@ -66,17 +66,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 	const users = {
 		superadmin: {
 			username: 'superadmin',
-			password: 'super123'
+			password: 'super123',
 		},
 		receptionist: {
-			username: 'receptionist',
-			password: 'admin123'
+			username: 'asma',
+			password: 'admin123',
 		},
 		professors: [
 			{ id: 1, username: 'prof.mansouri', password: 'prof123', name: 'Prof. Mansouri', room: 'Room 7' },
 			{ id: 2, username: 'prof.bedaida', password: 'prof123', name: 'Prof. Bedaida', room: 'Room 8' },
 			{ id: 3, username: 'prof.touati', password: 'prof123', name: 'Prof. Touati', room: 'Room 9' },
-		]
+		],
 	};
 
 	const handleLogin = async (e: React.FormEvent) => {
@@ -85,7 +85,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 		setIsLoading(true);
 
 		// Simulate API delay
-		await new Promise(resolve => setTimeout(resolve, 1000));
+		await new Promise((resolve) => setTimeout(resolve, 1000));
 
 		try {
 			if (selectedRole === 'superadmin') {
@@ -101,9 +101,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 					throw new Error('Invalid receptionist credentials');
 				}
 			} else if (selectedRole === 'professor') {
-				const professor = users.professors.find(
-					p => p.username === username && p.password === password
-				);
+				const professor = users.professors.find((p) => p.username === username && p.password === password);
 				if (professor) {
 					onLogin('professor', professor.id);
 				} else {
@@ -118,132 +116,131 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 	};
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center p-4">
-			<div className="w-full max-w-md">
+		<div className='min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center p-4'>
+			<div className='w-full max-w-md'>
 				{/* Header */}
-				<div className="text-center mb-8">
-					<div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-						<GraduationCap className="h-8 w-8 text-white" />
+				<div className='text-center mb-8'>
+					<div className='w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4'>
+						<GraduationCap className='h-8 w-8 text-white' />
 					</div>
-					<h1 className="text-3xl font-bold text-gray-900">Interview Hub</h1>
-					<p className="text-gray-600 mt-2">University Management System</p>
+					<h1 className='text-3xl font-bold text-gray-900'>Interview Hub</h1>
+					<p className='text-gray-600 mt-2'>University Management System</p>
 				</div>
 
 				<Card>
 					<CardHeader>
-						<CardTitle className="text-center">Login</CardTitle>
+						<CardTitle className='text-center'>Login</CardTitle>
 					</CardHeader>
 					<CardContent>
 						{!selectedRole ? (
-							<div className="space-y-4">
-								<p className="text-center text-gray-600 mb-6">Select your role to continue</p>
-								
+							<div className='space-y-4'>
+								<p className='text-center text-gray-600 mb-6'>Select your role to continue</p>
+
 								<Button
 									onClick={() => setSelectedRole('superadmin')}
-									variant="outline"
-									className="w-full justify-start h-16 text-left">
-									<GraduationCap className="h-6 w-6 mr-4 text-purple-600" />
+									variant='outline'
+									className='w-full justify-start h-16 text-left'>
+									<GraduationCap className='h-6 w-6 mr-4 text-purple-600' />
 									<div>
-										<div className="font-semibold text-purple-600">Super Admin</div>
-										<div className="text-sm text-gray-500">Complete system administration</div>
+										<div className='font-semibold text-purple-600'>Super Admin</div>
+										<div className='text-sm text-gray-500'>Complete system administration</div>
 									</div>
 								</Button>
 
 								<Button
 									onClick={() => setSelectedRole('receptionist')}
-									variant="outline"
-									className="w-full justify-start h-16 text-left">
-									<User className="h-6 w-6 mr-4" />
+									variant='outline'
+									className='w-full justify-start h-16 text-left'>
+									<User className='h-6 w-6 mr-4' />
 									<div>
-										<div className="font-semibold">Receptionist</div>
-										<div className="text-sm text-gray-500">Manage students and interviews</div>
+										<div className='font-semibold'>Receptionist</div>
+										<div className='text-sm text-gray-500'>Manage students and interviews</div>
 									</div>
 								</Button>
 
 								<Button
 									onClick={() => setSelectedRole('professor')}
-									variant="outline"
-									className="w-full justify-start h-16 text-left">
-									<GraduationCap className="h-6 w-6 mr-4" />
+									variant='outline'
+									className='w-full justify-start h-16 text-left'>
+									<GraduationCap className='h-6 w-6 mr-4' />
 									<div>
-										<div className="font-semibold">Professor</div>
-										<div className="text-sm text-gray-500">View dashboard and room status</div>
+										<div className='font-semibold'>Professor</div>
+										<div className='text-sm text-gray-500'>View dashboard and room status</div>
 									</div>
 								</Button>
 							</div>
 						) : (
-							<form onSubmit={handleLogin} className="space-y-4">
-								<div className="text-center mb-4">
-									<div className="inline-flex items-center gap-2 text-lg font-semibold">
+							<form onSubmit={handleLogin} className='space-y-4'>
+								<div className='text-center mb-4'>
+									<div className='inline-flex items-center gap-2 text-lg font-semibold'>
 										{selectedRole === 'superadmin' ? (
-											<><GraduationCap className="h-5 w-5 text-purple-600" /> Super Admin Login</>
+											<>
+												<GraduationCap className='h-5 w-5 text-purple-600' /> Super Admin Login
+											</>
 										) : selectedRole === 'receptionist' ? (
-											<><User className="h-5 w-5" /> Receptionist Login</>
+											<>
+												<User className='h-5 w-5' /> Receptionist Login
+											</>
 										) : (
-											<><GraduationCap className="h-5 w-5" /> Professor Login</>
+											<>
+												<GraduationCap className='h-5 w-5' /> Professor Login
+											</>
 										)}
 									</div>
 								</div>
 
 								{error && (
-									<div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+									<div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg'>
 										{error}
 									</div>
 								)}
 
 								<div>
-									<label className="block text-sm font-medium text-gray-700 mb-2">
-										Username
-									</label>
+									<label className='block text-sm font-medium text-gray-700 mb-2'>Username</label>
 									<input
-										type="text"
+										type='text'
 										value={username}
 										onChange={(e) => setUsername(e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+										className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 										placeholder={selectedRole === 'receptionist' ? 'receptionist' : 'prof.username'}
 										required
 									/>
 								</div>
 
 								<div>
-									<label className="block text-sm font-medium text-gray-700 mb-2">
-										Password
-									</label>
+									<label className='block text-sm font-medium text-gray-700 mb-2'>Password</label>
 									<input
-										type="password"
+										type='password'
 										value={password}
 										onChange={(e) => setPassword(e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-										placeholder="Enter your password"
+										className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+										placeholder='Enter your password'
 										required
 									/>
 								</div>
 
-								<div className="flex gap-3">
+								<div className='flex gap-3'>
 									<Button
-										type="button"
-										variant="outline"
+										type='button'
+										variant='outline'
 										onClick={() => {
 											setSelectedRole(null);
 											setUsername('');
 											setPassword('');
 											setError('');
 										}}
-										className="flex-1">
+										className='flex-1'>
 										Back
 									</Button>
-									<Button
-										type="submit"
-										disabled={isLoading}
-										className="flex-1">
+									<Button type='submit' disabled={isLoading} className='flex-1'>
 										{isLoading ? (
 											<>
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+												<div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2'></div>
 												Signing in...
 											</>
 										) : (
 											<>
-												<LogIn className="h-4 w-4 mr-2" />
+												<LogIn className='h-4 w-4 mr-2' />
 												Sign In
 											</>
 										)}
