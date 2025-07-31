@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, UserPlus, ChevronDown } from 'lucide-react';
 
-interface Student {
-	studentId: string;
+interface StudentFormData {
 	name: string;
+	program: string;
 }
 
 interface StudentFormProps {
-	onAddStudent: (student: Student) => void;
+	onAddStudent: (student: StudentFormData) => void;
 	disabled?: boolean;
 }
 
@@ -32,7 +32,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({ onAddStudent, disabled
 		
 		onAddStudent({
 			name: name.trim(),
-			studentId: selectedProgram.trim() || 'No Program'
+			program: selectedProgram.trim() || 'No Program'
 		});
 		
 		setName('');

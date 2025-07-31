@@ -27,6 +27,11 @@ interface Student {
 	name: string;
 }
 
+interface StudentFormData {
+	name: string;
+	program: string;
+}
+
 interface QueueEntry extends Student {
 	queueNumber: number;
 	arrivalTime: Date;
@@ -637,8 +642,8 @@ const InterviewQueueSystem = () => {
 	}, []);
 
 	// Add new student - with automatic ID generation
-	const handleAddStudent = useCallback(async (student: Student) => {
-		if (!student.name.trim()) {
+	const handleAddStudent = useCallback(async (studentData: StudentFormData) => {
+		if (!studentData.name.trim()) {
 			setError('Please enter student name');
 			return;
 		}
@@ -647,7 +652,7 @@ const InterviewQueueSystem = () => {
 			setError(null);
 			
 			// Generate unique student ID automatically
-			const generatedId = generateStudentId(student.studentId || 'No Program', student.name);
+			const generatedId = generateStudentId(studentData.program, studentData.name);
 			
 			// Ensure the generated ID is unique by checking against existing students
 			let finalId = generatedId;
@@ -656,21 +661,21 @@ const InterviewQueueSystem = () => {
 				finalId = `${generatedId}${counter}`;
 				counter++;
 			}
-			const studentData = {
+			const dbStudentData = {
 				student_id: finalId,
-				name: student.name.trim(),
+				name: studentData.name.trim(),
 				interview_date: selectedDate,
 			};
 
-			const { error } = await supabase.from('students').insert(studentData);
+			const { error } = await supabase.from('students').insert(dbStudentData);
 
 			if (error) throw error;
 
-			console.log('Successfully added new student:', studentData);
+			console.log('Successfully added new student:', dbStudentData);
 
 			// Create student object
 			const newStudent: Student = {
-				name: student.name.trim(),
+				name: studentData.name.trim(),
 				studentId: finalId,
 			};
 
