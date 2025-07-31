@@ -688,14 +688,7 @@ const InterviewQueueSystem = () => {
 				},
 			}));
 
-			// Show undo option
-			setLastAddedStudent(newStudent);
-			setShowUndoToast(true);
-			
-			// Auto-hide undo toast after 5 seconds
-			setTimeout(() => {
-				setShowUndoToast(false);
-			}, 5000);
+			// Student added successfully - no undo toast needed
 		} catch (error) {
 			console.error('Error adding new student:', error);
 			setError(`Failed to add student: ${error instanceof Error ? error.message : 'Unknown error'}`);
