@@ -627,27 +627,38 @@ const InterviewQueueSystem = () => {
 		[currentData, selectedDate]
 	);
 
-	// Add new student - fixed with proper validation and error handling
+	// Generate unique student ID
+	const generateStudentId = useCallback((program: string, name: string) => {
+		const timestamp = Date.now();
+		const nameInitials = name.trim().split(' ').map(n => n.charAt(0).toUpperCase()).join('').slice(0, 2);
+		const programPrefix = program && program !== 'No Program' ? program.replace(/\s+/g, '').toUpperCase().slice(0, 3) : 'STU';
+		const randomSuffix = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+		
+		return `${programPrefix}${nameInitials}${randomSuffix}`;
+	}, []);
+
+	// Add new student - with automatic ID generation
 	const handleAddStudent = useCallback(async (student: Student) => {
-		if (!student.name.trim() || !student.studentId.trim()) {
-			setError('Please enter both student name and ID');
-			return;
-		}
-
-		// Check if student ID already exists
-		const existingStudent = currentData.registeredStudents.find(
-			(s) => s.studentId.toLowerCase() === student.studentId.trim().toLowerCase()
-		);
-
-		if (existingStudent) {
-			setError('Student ID already exists');
+		if (!student.name.trim()) {
+			setError('Please enter student name');
 			return;
 		}
 
 		try {
 			setError(null);
+			
+			// Generate unique student ID automatically
+			const generatedId = generateStudentId(student.studentId || 'No Program', student.name);
+			
+			// Ensure the generated ID is unique by checking against existing students
+			let finalId = generatedId;
+			let counter = 1;
+			while (currentData.registeredStudents.some(s => s.studentId === finalId)) {
+				finalId = `${generatedId}${counter}`;
+				counter++;
+			}
 			const studentData = {
-				student_id: student.studentId.trim(),
+				student_id: finalId,
 				name: student.name.trim(),
 				interview_date: selectedDate,
 			};
@@ -661,7 +672,7 @@ const InterviewQueueSystem = () => {
 			// Create student object
 			const newStudent: Student = {
 				name: student.name.trim(),
-				studentId: student.studentId.trim(),
+				studentId: finalId,
 			};
 
 			// Update local state
