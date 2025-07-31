@@ -624,12 +624,11 @@ const InterviewQueueSystem = () => {
 				setError(`Failed to complete interview: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			}
 		},
-		[currentData, selectedDate]
+		[currentData, selectedDate, loadDateData]
 	);
 
 	// Generate unique student ID
 	const generateStudentId = useCallback((program: string, name: string) => {
-		const timestamp = Date.now();
 		const nameInitials = name.trim().split(' ').map(n => n.charAt(0).toUpperCase()).join('').slice(0, 2);
 		const programPrefix = program && program !== 'No Program' ? program.replace(/\s+/g, '').toUpperCase().slice(0, 3) : 'STU';
 		const randomSuffix = Math.floor(Math.random() * 100).toString().padStart(2, '0');
@@ -696,7 +695,7 @@ const InterviewQueueSystem = () => {
 			console.error('Error adding new student:', error);
 			setError(`Failed to add student: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
-	}, [currentData, selectedDate]);
+	}, [currentData, selectedDate, generateStudentId]);
 
 	// Undo last added student
 	const undoAddStudent = useCallback(async () => {
