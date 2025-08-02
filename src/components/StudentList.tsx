@@ -14,9 +14,30 @@ interface QueueEntry extends Student {
 	assignedRoom: string | null;
 }
 
+interface CompletedInterview {
+	studentId: string;
+	name: string;
+	completedTime: Date;
+	interviewDuration: number;
+	professorName: string;
+	room: string;
+}
+
+interface Professor {
+	id: number;
+	name: string;
+	room: string;
+	floor: string;
+	status: 'available' | 'busy' | 'unavailable' | 'offline';
+	currentStudent: Student | null;
+	interviewStartTime: Date | null;
+}
+
 interface StudentListProps {
 	students: Student[];
 	waitingQueue: QueueEntry[];
+	completedInterviews: CompletedInterview[];
+	professors: Professor[];
 	onAddToQueue: (student: Student) => void;
 	onDeleteStudent: (student: Student) => void;
 	onEditStudent?: (oldStudent: Student, newStudent: Student) => void;
@@ -96,6 +117,8 @@ const STUDENT_PROGRAMS = [
 export const StudentList: React.FC<StudentListProps> = ({
 	students,
 	waitingQueue,
+	completedInterviews,
+	professors,
 	onAddToQueue,
 	onDeleteStudent,
 	onEditStudent,
@@ -142,13 +165,23 @@ export const StudentList: React.FC<StudentListProps> = ({
 	}, [editName, editProgram, onEditStudent]);
 
 	const filteredStudents = useMemo(
-		() =>
-			students.filter(
+		() => {
+			const filtered = students.filter(
 				(student) =>
 					student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
 					student.studentId.toLowerCase().includes(searchTerm.toLowerCase())
-			),
-		[students, searchTerm]
+			);
+			
+			// Sort: non-queued students first, then queued students
+			return filtered.sort((a, b) => {
+				const aInQueue = waitingQueue.some((w) => w.studentId === a.studentId);
+				const bInQueue = waitingQueue.some((w) => w.studentId === b.studentId);
+				
+				if (aInQueue === bInQueue) return 0; // Keep original order if both have same status
+				return aInQueue ? 1 : -1; // Non-queued first (return -1), queued second (return 1)
+			});
+		},
+		[students, searchTerm, waitingQueue]
 	);
 
 	return (
@@ -171,6 +204,11 @@ export const StudentList: React.FC<StudentListProps> = ({
 				<div className='max-h-80 overflow-y-auto space-y-2'>
 					{filteredStudents.map((student) => {
 						const isInQueue = waitingQueue.some((w) => w.studentId === student.studentId);
+						const isCompleted = completedInterviews.some((c) => c.studentId === student.studentId);
+						const isInInterview = professors.some((prof) => 
+							prof.status === 'busy' && 
+							prof.currentStudent?.studentId === student.studentId
+						);
 						const isEditing = editingStudent === student.studentId;
 
 						return (
@@ -252,7 +290,17 @@ export const StudentList: React.FC<StudentListProps> = ({
 										</>
 									) : (
 										<>
-											{!isInQueue && !readOnly && (
+											{isCompleted && (
+												<div className="text-sm text-green-600 bg-green-50 px-2 py-1 rounded">
+													Completed
+												</div>
+											)}
+											{isInInterview && !isCompleted && (
+												<div className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
+													In Interview
+												</div>
+											)}
+											{!isInQueue && !isCompleted && !readOnly && (
 												<Button
 													onClick={() => onAddToQueue(student)}
 													size='sm'
@@ -262,7 +310,7 @@ export const StudentList: React.FC<StudentListProps> = ({
 													Add to Queue
 												</Button>
 											)}
-											{!readOnly && onEditStudent && (
+											{!isCompleted && !isInInterview && !readOnly && onEditStudent && (
 												<Button
 													onClick={() => startEdit(student)}
 													size='sm'
@@ -272,7 +320,7 @@ export const StudentList: React.FC<StudentListProps> = ({
 													<Edit2 className='h-4 w-4' />
 												</Button>
 											)}
-											{!readOnly && (
+											{!isCompleted && !isInInterview && !readOnly && (
 												<Button
 													onClick={() => onDeleteStudent(student)}
 													size='sm'

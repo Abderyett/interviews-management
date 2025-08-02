@@ -12,7 +12,27 @@ import {
 	Activity,
 	ChevronRight,
 	RefreshCw,
+	GripVertical,
 } from 'lucide-react';
+
+import {
+	DndContext,
+	closestCenter,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from '@dnd-kit/core';
+import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
+import {
+	SortableContext,
+	sortableKeyboardCoordinates,
+	verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+	useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import { supabase } from './lib/supabase';
 import { StudentForm } from './components/StudentForm';
@@ -188,6 +208,16 @@ const InterviewQueueSystem = () => {
 		'checking'
 	);
 
+	// Drag and drop state (for dnd-kit)
+	
+	// Configure drag sensors
+	const sensors = useSensors(
+		useSensor(PointerSensor),
+		useSensor(KeyboardSensor, {
+			coordinateGetter: sortableKeyboardCoordinates,
+		})
+	);
+
 	// Get current date data or initialize empty - memoized for performance
 	const getCurrentDateData = useCallback((): DateData => {
 		return (
@@ -250,8 +280,6 @@ const InterviewQueueSystem = () => {
 
 	// Load data from Supabase - fixed with proper error handling
 	const loadDateData = useCallback(async () => {
-		if (isLoading) return;
-
 		setIsLoading(true);
 		setError(null);
 
@@ -321,7 +349,7 @@ const InterviewQueueSystem = () => {
 						name: ps.name,
 						room: ps.room,
 						floor: ps.floor,
-						status: ps.status as 'available' | 'busy' | 'unavailable',
+						status: ps.status as 'available' | 'busy' | 'unavailable' | 'offline',
 						currentStudent: ps.current_student_id
 							? {
 									studentId: ps.current_student_id,
@@ -333,7 +361,7 @@ const InterviewQueueSystem = () => {
 							  }
 							: null,
 						interviewStartTime: ps.interview_start_time ? new Date(ps.interview_start_time) : null,
-					})) || currentData.professors, // Fallback to default professors
+					})) || [], // Empty array if no professors found
 			};
 
 			setDateData((prev) => ({
@@ -365,7 +393,7 @@ const InterviewQueueSystem = () => {
 						name: 'Prof. Mansouri',
 						room: 'Room 7',
 						floor: 'First Floor',
-						status: 'available',
+						status: 'offline',
 						date: selectedDate,
 					},
 					{
@@ -373,7 +401,7 @@ const InterviewQueueSystem = () => {
 						name: 'Prof. Bedaida',
 						room: 'Room 8',
 						floor: 'First Floor',
-						status: 'available',
+						status: 'offline',
 						date: selectedDate,
 					},
 					{
@@ -381,7 +409,7 @@ const InterviewQueueSystem = () => {
 						name: 'Prof. Touati',
 						room: 'Room 9',
 						floor: 'First Floor',
-						status: 'available',
+						status: 'offline',
 						date: selectedDate,
 					},
 				];
@@ -396,33 +424,29 @@ const InterviewQueueSystem = () => {
 		}
 	}, [selectedDate]);
 
-	// Check Supabase connection
-	const checkConnection = useCallback(async () => {
-		setConnectionStatus('checking');
-		try {
-			const { error } = await supabase.from('students').select('count').limit(1);
-			if (error) throw error;
-			setConnectionStatus('connected');
-			console.log('Supabase connection successful');
-		} catch (error) {
-			setConnectionStatus('disconnected');
-			console.error('Supabase connection failed:', error);
-			setError(`Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-		}
-	}, []);
-
-	// Auto-load data on component mount and date change
+	// Check connection and load data on component mount and date change
 	useEffect(() => {
 		let mounted = true;
 
 		const initAndLoad = async () => {
 			if (!mounted) return;
-			await checkConnection();
-			if (!mounted) return;
-			if (connectionStatus === 'connected' || connectionStatus === 'checking') {
+			
+			// Check connection first
+			try {
+				setConnectionStatus('checking');
+				const { error } = await supabase.from('students').select('count').limit(1);
+				if (error) throw error;
+				setConnectionStatus('connected');
+				
+				// If connected, proceed with data loading
+				if (!mounted) return;
 				await initializeProfessorData();
 				if (!mounted) return;
 				await loadDateData();
+			} catch (error) {
+				setConnectionStatus('disconnected');
+				console.error('Connection or data loading failed:', error);
+				setError(`Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			}
 		};
 
@@ -431,7 +455,7 @@ const InterviewQueueSystem = () => {
 		return () => {
 			mounted = false;
 		};
-	}, [selectedDate]);
+	}, [selectedDate, initializeProfessorData, loadDateData]);
 
 	// Add student to queue - fixed
 	const addStudentToQueue = useCallback(
@@ -772,7 +796,7 @@ const InterviewQueueSystem = () => {
 	}, [lastQueueEntry, currentData, selectedDate]);
 
 	// Handle login
-	const handleLogin = useCallback((role: 'receptionist' | 'professor' | 'superadmin', profId?: number) => {
+	const handleLogin = useCallback(async (role: 'receptionist' | 'professor' | 'superadmin', profId?: number) => {
 		setIsLoggedIn(true);
 		setUserRole(role);
 		
@@ -784,14 +808,45 @@ const InterviewQueueSystem = () => {
 			setProfessorId(profId);
 			localStorage.setItem('professorId', profId.toString());
 			setCurrentView('students'); // Professor can view dashboard
+			
+			// Set professor status to available when they log in
+			try {
+				await supabase
+					.from('professor_status')
+					.update({ status: 'available' })
+					.eq('professor_id', profId)
+					.eq('date', selectedDate);
+				console.log('Professor status set to available on login');
+				
+				// Refresh data to show updated status
+				setTimeout(() => {
+					loadDateData();
+				}, 300);
+			} catch (error) {
+				console.error('Error setting professor status on login:', error);
+			}
 		} else {
 			localStorage.removeItem('professorId');
 			setCurrentView('students');
 		}
-	}, []);
+	}, [selectedDate, loadDateData]);
 
 	// Handle logout
-	const handleLogout = useCallback(() => {
+	const handleLogout = useCallback(async () => {
+		// Set professor status to offline if professor is logging out
+		if (userRole === 'professor' && professorId) {
+			try {
+				await supabase
+					.from('professor_status')
+					.update({ status: 'offline' })
+					.eq('professor_id', professorId)
+					.eq('date', selectedDate);
+				console.log('Professor status set to offline on logout');
+			} catch (error) {
+				console.error('Error setting professor status on logout:', error);
+			}
+		}
+		
 		setIsLoggedIn(false);
 		setUserRole(null);
 		setProfessorId(null);
@@ -801,7 +856,7 @@ const InterviewQueueSystem = () => {
 		localStorage.removeItem('isLoggedIn');
 		localStorage.removeItem('userRole');
 		localStorage.removeItem('professorId');
-	}, []);
+	}, [userRole, professorId, selectedDate]);
 
 	// Remove student from queue
 	const removeFromQueue = useCallback(async (queueEntry: QueueEntry) => {
@@ -834,6 +889,183 @@ const InterviewQueueSystem = () => {
 			setError(`Failed to remove from queue: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}, [currentData, selectedDate]);
+
+	// Reorder queue items via drag and drop
+	const reorderQueue = useCallback(async (dragIndex: number, dropIndex: number) => {
+		if (dragIndex === dropIndex) return;
+
+		try {
+			setError(null);
+			
+			// Create a copy of the current queue
+			const newQueue = [...currentData.waitingQueue];
+			
+			// Remove the dragged item and insert it at the new position
+			const [draggedItem] = newQueue.splice(dragIndex, 1);
+			newQueue.splice(dropIndex, 0, draggedItem);
+			
+			// Update queue numbers to match new positions
+			const updatedQueue = newQueue.map((item, index) => ({
+				...item,
+				queueNumber: index + 1
+			}));
+			
+			// Update local state immediately for responsive UI
+			setDateData(prev => ({
+				...prev,
+				[selectedDate]: {
+					...currentData,
+					waitingQueue: updatedQueue
+				}
+			}));
+			
+			// Update database with new queue order
+			const updatePromises = updatedQueue.map(item => 
+				supabase
+					.from('interview_queue')
+					.update({ queue_number: item.queueNumber })
+					.eq('student_id', item.studentId)
+					.eq('interview_date', selectedDate)
+			);
+			
+			await Promise.all(updatePromises);
+			console.log('Queue reordered successfully');
+			
+		} catch (error) {
+			console.error('Error reordering queue:', error);
+			setError(`Failed to reorder queue: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			// Reload data to revert changes on error
+			loadDateData();
+		}
+	}, [currentData, selectedDate, loadDateData]);
+
+	// Drag and drop handlers using dnd-kit
+	const handleDragStart = useCallback((event: DragStartEvent) => {
+		console.log('Drag start:', event.active.id);
+	}, []);
+
+	const handleDragEnd = useCallback((event: DragEndEvent) => {
+		const { active, over } = event;
+		console.log('Drag end:', active?.id, '->', over?.id);
+		
+		if (over && active.id !== over.id) {
+			const oldIndex = currentData.waitingQueue.findIndex(
+				(item) => `queue-${item.studentId}-${item.queueNumber}` === active.id
+			);
+			const newIndex = currentData.waitingQueue.findIndex(
+				(item) => `queue-${item.studentId}-${item.queueNumber}` === over.id
+			);
+			
+			if (oldIndex !== -1 && newIndex !== -1) {
+				reorderQueue(oldIndex, newIndex);
+			}
+		}
+	}, [currentData.waitingQueue, reorderQueue]);
+
+	// Sortable Queue Item Component
+	const SortableQueueItem = ({ student, index, availableProfessors, isReadOnly }: {
+		student: QueueEntry;
+		index: number;
+		availableProfessors: Professor[];
+		isReadOnly: boolean;
+	}) => {
+		const {
+			attributes,
+			listeners,
+			setNodeRef,
+			transform,
+			transition,
+			isDragging,
+		} = useSortable({ id: `queue-${student.studentId}-${student.queueNumber}` });
+
+		const style = {
+			transform: CSS.Transform.toString(transform),
+			transition,
+			opacity: isDragging ? 0.8 : 1,
+		};
+
+		return (
+			<div
+				ref={setNodeRef}
+				style={style}
+				className={`relative border rounded-lg p-4 transition-all duration-200 ${
+					isDragging ? 'shadow-lg z-50' : 'hover:shadow-md'
+				} bg-white`}>
+				{/* Drag Handle */}
+				{!isReadOnly && (
+					<div
+						{...attributes}
+						{...listeners}
+						className="absolute left-2 top-4 text-gray-400 cursor-grab active:cursor-grabbing hover:text-gray-600">
+						<GripVertical className="h-4 w-4" />
+					</div>
+				)}
+				
+				{/* Queue Position */}
+				<div className='absolute -left-2 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-orange-600 rounded-full flex items-center justify-center text-white text-xs font-bold'>
+					{index + 1}
+				</div>
+
+				<div className='ml-4'>
+					<div className='flex items-start justify-between mb-3'>
+						<div className='flex items-center gap-3'>
+							<div className='w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium text-sm'>
+								{student.name
+									.split(' ')
+									.map((n) => n[0])
+									.join('')
+									.toUpperCase()}
+							</div>
+							<div>
+								<p className='font-medium'>{student.name}</p>
+								<p className='text-sm text-muted-foreground'>{student.studentId}</p>
+								<p className='text-xs text-muted-foreground'>
+									Queue #{student.queueNumber} • {student.arrivalTime.toLocaleTimeString()}
+								</p>
+							</div>
+						</div>
+					</div>
+
+					{availableProfessors.length > 0 ? (
+						<div className='space-y-2'>
+							<p className='text-sm font-medium text-green-700'>Ready for Interview</p>
+							<div className='flex gap-2 flex-wrap'>
+								{availableProfessors.map((professor: Professor) => (
+									<Button
+										key={professor.id}
+										onClick={isReadOnly ? undefined : () => sendStudentToRoom(student, professor.id)}
+										size='sm'
+										disabled={isLoading}
+										className='bg-green-600 hover:bg-green-700 text-white transition-colors duration-200'>
+										Send to {professor.room}
+									</Button>
+								))}
+							</div>
+						</div>
+					) : (
+						<div className='space-y-2'>
+							<p className='text-sm font-medium text-amber-700'>Waiting for Available Professor</p>
+							<p className='text-xs text-muted-foreground'>Student will be called when a professor becomes available</p>
+						</div>
+					)}
+
+					{!isReadOnly && (
+						<div className='mt-3 pt-3 border-t flex justify-end'>
+							<Button
+								onClick={() => removeFromQueue(student)}
+								size='sm'
+								variant='outline'
+								disabled={isLoading}
+								className='border-red-300 text-red-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200'>
+								<Trash2 className='h-4 w-4 mr-1' />
+								Remove from Queue
+							</Button>
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	};
 
 	// Delete student - enhanced with comprehensive cleanup
 	const deleteStudent = useCallback(
@@ -1220,6 +1452,8 @@ const InterviewQueueSystem = () => {
 						<StudentList
 							students={currentData.registeredStudents}
 							waitingQueue={currentData.waitingQueue}
+							completedInterviews={currentData.completedInterviews}
+							professors={currentData.professors}
 							onAddToQueue={isReadOnly ? () => {} : addStudentToQueue}
 							onDeleteStudent={isReadOnly ? () => {} : (student) => setDeleteModal({ show: true, student })}
 							onEditStudent={isReadOnly ? undefined : editStudent}
@@ -1231,6 +1465,7 @@ const InterviewQueueSystem = () => {
 				</div>
 
 				{/* Queue Management */}
+				{/* Queue Management */}
 				<div className='xl:col-span-4'>
 					<Card className='h-full'>
 						<CardHeader>
@@ -1241,99 +1476,42 @@ const InterviewQueueSystem = () => {
 							<CardDescription>{currentData.waitingQueue.length} students waiting</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className='space-y-3'>
-								{currentData.waitingQueue.length === 0 ? (
-									<div className='text-center py-8'>
-										<Clock className='h-12 w-12 text-muted-foreground mx-auto mb-3' />
-										<p className='text-muted-foreground'>Queue is Empty</p>
-										<p className='text-sm text-muted-foreground mt-1'>
-											Add students from the registry to get started
-										</p>
-									</div>
-								) : (
-									currentData.waitingQueue.map((student: QueueEntry, index: number) => (
-										<div
-											key={`${student.studentId}-${student.queueNumber}`}
-											className='relative border rounded-lg p-4 hover:shadow-md transition-shadow duration-200'>
-											{/* Queue Position */}
-											<div className='absolute -left-2 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-orange-600 rounded-full flex items-center justify-center text-white text-xs font-bold'>
-												{index + 1}
-											</div>
-
-											<div className='ml-4'>
-												<div className='flex items-start justify-between mb-3'>
-													<div className='flex items-center gap-3'>
-														<div className='w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium text-sm'>
-															{student.name
-																.split(' ')
-																.map((n) => n[0])
-																.join('')
-																.toUpperCase()}
-														</div>
-														<div>
-															<p className='font-medium'>{student.name}</p>
-															<p className='text-sm text-muted-foreground'>{student.studentId}</p>
-															<p className='text-xs text-muted-foreground'>
-																Queue #{student.queueNumber} • {student.arrivalTime.toLocaleTimeString()}
-															</p>
-														</div>
-													</div>
-												</div>
-
-												{availableProfessors.length > 0 ? (
-													<div className='space-y-2'>
-														<p className='text-sm font-medium text-green-700'>Ready for Interview</p>
-														<div className='flex gap-2 flex-wrap'>
-															{availableProfessors.map((professor: Professor) => (
-																<Button
-																	key={professor.id}
-																	onClick={isReadOnly ? undefined : () => sendStudentToRoom(student, professor.id)}
-																	size='sm'
-																	variant='outline'
-																	disabled={isReadOnly}
-																	className={`transition-all duration-200 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'border-indigo-300 text-indigo-700 hover:bg-indigo-600 hover:text-white'}`}>
-																	Send to {professor.room}
-																</Button>
-															))}
-														</div>
-														{!isReadOnly && (
-															<Button
-																onClick={() => removeFromQueue(student)}
-																variant='outline'
-																size='sm'
-																className='w-full border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all duration-200'>
-																<X className='h-4 w-4 mr-2' />
-																Remove from Queue
-															</Button>
-														)}
-													</div>
-												) : (
-													<div className='flex items-center justify-between'>
-														<div className='flex items-center gap-2 text-sm text-orange-600'>
-															<Clock className='h-4 w-4' />
-															<p>All professors are busy. Please wait.</p>
-														</div>
-														{!isReadOnly && (
-															<Button
-																onClick={() => removeFromQueue(student)}
-																variant='outline'
-																size='sm'
-																className='border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all duration-200'>
-																<X className='h-4 w-4' />
-															</Button>
-														)}
-													</div>
-												)}
-											</div>
+							{currentData.waitingQueue.length === 0 ? (
+								<div className='text-center py-8'>
+									<Clock className='h-12 w-12 text-muted-foreground mx-auto mb-3' />
+									<p className='text-muted-foreground'>Queue is Empty</p>
+									<p className='text-sm text-muted-foreground mt-1'>
+										Add students from the registry to get started
+									</p>
+								</div>
+							) : (
+								<DndContext
+									sensors={sensors}
+									collisionDetection={closestCenter}
+									onDragStart={handleDragStart}
+									onDragEnd={handleDragEnd}>
+									<SortableContext
+										items={currentData.waitingQueue.map(item => `queue-${item.studentId}-${item.queueNumber}`)}
+										strategy={verticalListSortingStrategy}>
+										<div className='space-y-3'>
+											{currentData.waitingQueue.map((student: QueueEntry, index: number) => (
+												<SortableQueueItem
+													key={`queue-${student.studentId}-${student.queueNumber}`}
+													student={student}
+													index={index}
+													availableProfessors={availableProfessors}
+													isReadOnly={isReadOnly}
+												/>
+											))}
 										</div>
-									))
-								)}
-							</div>
+									</SortableContext>
+								</DndContext>
+							)}
 						</CardContent>
 					</Card>
 				</div>
 
-				{/* Room Status */}
+				{/* Room Status */}				{/* Room Status */}
 				<div className='xl:col-span-3'>
 					<Card className='h-full'>
 						<CardHeader>
@@ -1345,12 +1523,19 @@ const InterviewQueueSystem = () => {
 						<CardContent>
 							<div className='space-y-3'>
 								{currentData.professors.map((professor: Professor) => {
-									// Determine actual display status based on login state
-									let displayStatus: Professor['status'] = professor.status;
-									if (professor.status === 'available' && professor.id !== professorId) {
-										// Professor is available but not logged in - show as offline
-										displayStatus = 'offline';
-									}
+									// Show actual professor status from database
+									const displayStatus: Professor['status'] = professor.status;
+									
+									// Calculate daily interview stats for this professor
+									const today = new Date().toDateString();
+									const todayInterviews = currentData.completedInterviews.filter(
+										(interview) => 
+											interview.professorName === professor.name &&
+											interview.completedTime.toDateString() === today
+									);
+									const totalCompleted = todayInterviews.length;
+									const totalDuration = todayInterviews.reduce((sum, interview) => sum + interview.interviewDuration, 0);
+									const avgDuration = totalCompleted > 0 ? Math.round(totalDuration / totalCompleted) : 0;
 									
 									return (
 										<div
@@ -1383,6 +1568,22 @@ const InterviewQueueSystem = () => {
 													)}
 												</div>
 											)}
+											
+											{/* Daily Interview Stats */}
+											<div className='mt-3 pt-2 border-t border-gray-200'>
+												<div className='flex justify-between text-xs text-muted-foreground'>
+													<span>Today: {totalCompleted} interviews</span>
+													{totalCompleted > 0 && (
+														<span>Avg: {avgDuration}min</span>
+													)}
+												</div>
+												{totalCompleted > 0 && (
+													<div className='text-xs text-muted-foreground mt-1'>
+														Total time: {Math.round(totalDuration / 60)}h {totalDuration % 60}min
+													</div>
+												)}
+											</div>
+											
 											{displayStatus === 'offline' && !professor.currentStudent && (
 												<p className='text-xs text-muted-foreground'>Professor not logged in</p>
 											)}
@@ -1527,12 +1728,19 @@ const InterviewQueueSystem = () => {
 							{currentData.professors
 								.filter((p: Professor) => p.id !== professorId)
 								.map((prof: Professor) => {
-									// Apply same offline logic for other professors
-									let displayStatus: Professor['status'] = prof.status;
-									if (prof.status === 'available') {
-										// Other professors show as offline when not the current logged in professor
-										displayStatus = 'offline';
-									}
+									// Show actual professor status from database
+									const displayStatus: Professor['status'] = prof.status;
+									
+									// Calculate daily interview stats for this professor
+									const today = new Date().toDateString();
+									const todayInterviews = currentData.completedInterviews.filter(
+										(interview) => 
+											interview.professorName === prof.name &&
+											interview.completedTime.toDateString() === today
+									);
+									const totalCompleted = todayInterviews.length;
+									const totalDuration = todayInterviews.reduce((sum, interview) => sum + interview.interviewDuration, 0);
+									const avgDuration = totalCompleted > 0 ? Math.round(totalDuration / totalCompleted) : 0;
 									
 									return (
 										<div
@@ -1561,6 +1769,22 @@ const InterviewQueueSystem = () => {
 													)}
 												</div>
 											)}
+											
+											{/* Daily Interview Stats */}
+											<div className='mt-3 pt-2 border-t border-gray-200'>
+												<div className='flex justify-between text-xs text-muted-foreground'>
+													<span>Today: {totalCompleted} interviews</span>
+													{totalCompleted > 0 && (
+														<span>Avg: {avgDuration}min</span>
+													)}
+												</div>
+												{totalCompleted > 0 && (
+													<div className='text-xs text-muted-foreground mt-1'>
+														Total time: {Math.round(totalDuration / 60)}h {totalDuration % 60}min
+													</div>
+												)}
+											</div>
+											
 											{displayStatus === 'offline' && !prof.currentStudent && (
 												<p className='text-xs text-muted-foreground'>Professor not logged in</p>
 											)}
