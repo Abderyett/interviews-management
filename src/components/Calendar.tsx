@@ -7,44 +7,47 @@ interface CalendarProps {
 	className?: string;
 }
 
-const Button = ({
-	children,
-	onClick,
-	variant = 'default',
-	size = 'default',
-	disabled = false,
-	className = '',
-}: {
-	children: React.ReactNode;
-	onClick?: () => void;
-	variant?: 'default' | 'outline' | 'ghost';
-	size?: 'default' | 'sm' | 'icon';
-	disabled?: boolean;
-	className?: string;
-}) => {
-	const baseClasses = 'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
-	
-	const variants = {
-		default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-		outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-		ghost: 'hover:bg-accent hover:text-accent-foreground',
-	};
-	
-	const sizes = {
-		default: 'h-10 px-4 py-2',
-		sm: 'h-9 px-3',
-		icon: 'h-10 w-10',
-	};
-	
-	return (
-		<button
-			className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
-			onClick={onClick}
-			disabled={disabled}>
-			{children}
-		</button>
-	);
-};
+/** Button ------------------------------------------------------------------ */
+type ButtonVariant = 'default' | 'outline' | 'ghost';
+type ButtonSize = 'default' | 'sm' | 'icon';
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+	variant?: ButtonVariant;
+	size?: ButtonSize;
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+	({ children, className = '', variant = 'default', size = 'default', type = 'button', ...rest }, ref) => {
+		const baseClasses =
+			'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+
+		const variants: Record<ButtonVariant, string> = {
+			default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+			outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+			ghost: 'hover:bg-accent hover:text-accent-foreground',
+		};
+
+		const sizes: Record<ButtonSize, string> = {
+			default: 'h-10 px-4 py-2',
+			sm: 'h-9 px-3',
+			icon: 'h-10 w-10',
+		};
+
+		return (
+			<button
+				ref={ref}
+				type={type}
+				className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
+				{...rest}>
+				{children}
+			</button>
+		);
+	}
+);
+Button.displayName = 'Button';
+
+/** Calendar ---------------------------------------------------------------- */
+type DayCell = { day: number; isCurrentMonth: boolean; date: Date };
 
 export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className = '' }) => {
 	const [isOpen, setIsOpen] = useState(false);
@@ -79,64 +82,61 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 		if (!dateString) return 'Pick a date';
 		const date = new Date(dateString + 'T00:00:00');
 		if (isNaN(date.getTime())) return 'Pick a date';
-		return date.toLocaleDateString('en-US', { 
+		return date.toLocaleDateString('en-US', {
 			weekday: 'short',
-			year: 'numeric', 
-			month: 'short', 
-			day: 'numeric' 
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
 		});
 	};
 
-	const getMonthDays = (date: Date) => {
+	const getMonthDays = (date: Date): DayCell[] => {
 		const year = date.getFullYear();
 		const month = date.getMonth();
 		const firstDay = new Date(year, month, 1);
 		const lastDay = new Date(year, month + 1, 0);
 		const daysInMonth = lastDay.getDate();
 		const startingDayOfWeek = firstDay.getDay();
-		
-		const days = [];
-		
+
+		const days: DayCell[] = [];
+
 		// Previous month's trailing days
-		const prevMonth = new Date(year, month - 1, 0);
+		const prevMonthLastDate = new Date(year, month, 0).getDate();
 		for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+			const d = prevMonthLastDate - i;
 			days.push({
-				day: prevMonth.getDate() - i,
+				day: d,
 				isCurrentMonth: false,
-				date: new Date(year, month - 1, prevMonth.getDate() - i)
+				date: new Date(year, month - 1, d),
 			});
 		}
-		
+
 		// Current month days
 		for (let day = 1; day <= daysInMonth; day++) {
 			days.push({
 				day,
 				isCurrentMonth: true,
-				date: new Date(year, month, day)
+				date: new Date(year, month, day),
 			});
 		}
-		
-		// Next month's leading days
+
+		// Next month's leading days to fill a 6x7 grid (42 cells)
 		const remainingSlots = 42 - days.length;
 		for (let day = 1; day <= remainingSlots; day++) {
 			days.push({
 				day,
 				isCurrentMonth: false,
-				date: new Date(year, month + 1, day)
+				date: new Date(year, month + 1, day),
 			});
 		}
-		
+
 		return days;
 	};
 
 	const navigateMonth = (direction: 'prev' | 'next') => {
-		setCurrentMonth(prev => {
+		setCurrentMonth((prev) => {
 			const newMonth = new Date(prev);
-			if (direction === 'prev') {
-				newMonth.setMonth(prev.getMonth() - 1);
-			} else {
-				newMonth.setMonth(prev.getMonth() + 1);
-			}
+			newMonth.setMonth(prev.getMonth() + (direction === 'prev' ? -1 : 1));
 			return newMonth;
 		});
 	};
@@ -147,7 +147,7 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 		const day = String(date.getDate()).padStart(2, '0');
 		const dateString = `${year}-${month}-${day}`;
 		onChange(dateString);
-		// Don't close the calendar automatically - let user close it manually
+		// Keep popover open; close is user-controlled
 	};
 
 	const isSelectedDate = (date: Date) => {
@@ -177,79 +177,79 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 
 	return (
 		<div className={`relative ${className}`} ref={calendarRef}>
-			{/* Trigger Button - shadcn/ui style */}
+			{/* Trigger Button */}
 			<Button
-				variant="outline"
-				onClick={() => setIsOpen(!isOpen)}
-				className={`w-full justify-start text-left font-normal ${!value && 'text-muted-foreground'}`}
-			>
-				<CalendarIcon className="mr-2 h-4 w-4" />
+				variant='outline'
+				onClick={() => setIsOpen((o) => !o)}
+				className={`w-full justify-start text-left font-normal ${!value ? 'text-muted-foreground' : ''}`}>
+				<CalendarIcon className='mr-2 h-4 w-4' />
 				<span>{formatDisplayDate(value)}</span>
 			</Button>
 
-			{/* Calendar Popover - shadcn/ui style */}
+			{/* Calendar Popover */}
 			{isOpen && (
-				<div 
-					className="absolute z-[100] mt-2 rounded-md border bg-popover p-3 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 w-auto p-0"
+				<div
+					className='absolute z-[100] mt-2 w-auto rounded-md border bg-popover p-3 text-popover-foreground shadow-md'
 					onClick={(e) => e.stopPropagation()}
-				>
-					<div className="space-y-4 p-3">
+					role='dialog'
+					aria-modal='true'>
+					<div className='space-y-4'>
 						{/* Header with navigation */}
-						<div className="flex items-center justify-between space-x-1">
+						<div className='flex items-center justify-between space-x-1'>
 							<Button
-								variant="outline"
-								size="icon"
+								variant='outline'
+								size='icon'
 								onClick={(e) => {
 									e.stopPropagation();
 									navigateMonth('prev');
 								}}
-								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-							>
-								<ChevronLeft className="h-4 w-4" />
+								className='h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100'
+								aria-label='Previous month'>
+								<ChevronLeft className='h-4 w-4' />
 							</Button>
-							
-							<div className="flex flex-1 justify-center text-sm font-medium">
-								{monthName}
-							</div>
-							
+
+							<div className='flex flex-1 justify-center text-sm font-medium'>{monthName}</div>
+
 							<Button
-								variant="outline"
-								size="icon"
+								variant='outline'
+								size='icon'
 								onClick={(e) => {
 									e.stopPropagation();
 									navigateMonth('next');
 								}}
-								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-							>
-								<ChevronRight className="h-4 w-4" />
+								className='h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100'
+								aria-label='Next month'>
+								<ChevronRight className='h-4 w-4' />
 							</Button>
-							
+
 							<Button
-								variant="ghost"
-								size="icon"
+								variant='ghost'
+								size='icon'
 								onClick={(e) => {
 									e.stopPropagation();
 									setIsOpen(false);
 								}}
-								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-							>
-								<X className="h-4 w-4" />
+								className='h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100'
+								aria-label='Close calendar'>
+								<X className='h-4 w-4' />
 							</Button>
 						</div>
 
 						{/* Calendar grid */}
-						<div className="w-full space-y-2">
+						<div className='w-full space-y-2'>
 							{/* Weekday headers */}
-							<div className="flex">
+							<div className='flex'>
 								{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-									<div key={day} className="flex h-9 w-9 items-center justify-center text-xs font-normal text-muted-foreground">
+									<div
+										key={day}
+										className='flex h-9 w-9 items-center justify-center text-xs font-normal text-muted-foreground'>
 										{day}
 									</div>
 								))}
 							</div>
 
 							{/* Calendar days */}
-							<div className="grid grid-cols-7 gap-1">
+							<div className='grid grid-cols-7 gap-1'>
 								{monthDays.map((dayObj, index) => (
 									<button
 										key={index}
@@ -258,20 +258,21 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 											selectDate(dayObj.date);
 										}}
 										className={`inline-flex h-9 w-9 items-center justify-center whitespace-nowrap rounded-md p-0 text-sm font-normal ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground
-											${!dayObj.isCurrentMonth 
-												? 'text-muted-foreground opacity-50' 
-												: ''
+                      ${!dayObj.isCurrentMonth ? 'text-muted-foreground opacity-50' : ''}
+                      ${
+												isSelectedDate(dayObj.date)
+													? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground'
+													: ''
 											}
-											${isSelectedDate(dayObj.date)
-												? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground'
-												: ''
+                      ${
+												isToday(dayObj.date) && !isSelectedDate(dayObj.date)
+													? 'bg-accent text-accent-foreground'
+													: ''
 											}
-											${isToday(dayObj.date) && !isSelectedDate(dayObj.date)
-												? 'bg-accent text-accent-foreground'
-												: ''
-											}
-										`}
-									>
+                    `}
+										aria-pressed={isSelectedDate(dayObj.date)}
+										aria-label={dayObj.date.toDateString()}
+										type='button'>
 										{dayObj.day}
 									</button>
 								))}
@@ -279,27 +280,25 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 						</div>
 
 						{/* Footer with actions */}
-						<div className="flex items-center justify-between border-t pt-3">
+						<div className='flex items-center justify-between border-t pt-3'>
 							<Button
-								variant="ghost"
-								size="sm"
+								variant='ghost'
+								size='sm'
 								onClick={(e) => {
 									e.stopPropagation();
 									clearDate();
 								}}
-								className="h-8 px-2 text-xs"
-							>
+								className='h-8 px-2 text-xs'>
 								Clear
 							</Button>
 							<Button
-								variant="ghost"
-								size="sm"
+								variant='ghost'
+								size='sm'
 								onClick={(e) => {
 									e.stopPropagation();
 									goToToday();
 								}}
-								className="h-8 px-2 text-xs"
-							>
+								className='h-8 px-2 text-xs'>
 								Today
 							</Button>
 						</div>
