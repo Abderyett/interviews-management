@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 interface Message {
 	id: string;
 	sender: string;
-	senderRole: 'superadmin' | 'receptionist' | 'professor';
+	senderRole: 'superadmin' | 'receptionist' | 'professor' | 'sales';
 	senderName: string;
 	content: string;
 	timestamp: Date;
@@ -18,7 +18,7 @@ interface ChatSystemProps {
 	currentUser: {
 		id: string;
 		name: string;
-		role: 'superadmin' | 'receptionist' | 'professor';
+		role: 'superadmin' | 'receptionist' | 'professor' | 'sales';
 	};
 }
 
@@ -89,7 +89,7 @@ export const SimpleChatSystem: React.FC<ChatSystemProps> = ({ currentUser }) => 
 			const loadedMessages: Message[] = data.map(msg => ({
 				id: msg.id,
 				sender: msg.sender_id,
-				senderRole: msg.sender_role as 'superadmin' | 'receptionist' | 'professor',
+				senderRole: msg.sender_role as 'superadmin' | 'receptionist' | 'professor' | 'sales',
 				senderName: msg.sender_name,
 				content: msg.content,
 				timestamp: new Date(msg.created_at),
@@ -194,6 +194,7 @@ export const SimpleChatSystem: React.FC<ChatSystemProps> = ({ currentUser }) => 
 			case 'superadmin': return 'text-purple-600';
 			case 'receptionist': return 'text-blue-600';
 			case 'professor': return 'text-green-600';
+			case 'sales': return 'text-orange-600';
 			default: return 'text-gray-600';
 		}
 	};
@@ -203,6 +204,7 @@ export const SimpleChatSystem: React.FC<ChatSystemProps> = ({ currentUser }) => 
 			case 'superadmin': return 'bg-purple-100 text-purple-800';
 			case 'receptionist': return 'bg-blue-100 text-blue-800';
 			case 'professor': return 'bg-green-100 text-green-800';
+			case 'sales': return 'bg-orange-100 text-orange-800';
 			default: return 'bg-gray-100 text-gray-800';
 		}
 	};

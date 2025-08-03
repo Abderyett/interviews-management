@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { GraduationCap, User, LogIn } from 'lucide-react';
 
 interface LoginProps {
-	onLogin: (role: 'receptionist' | 'professor' | 'superadmin', professorId?: number) => void;
+	onLogin: (
+		role: 'receptionist' | 'professor' | 'superadmin' | 'sales',
+		professorId?: number,
+		salesId?: number
+	) => void;
 }
 
 const Button = ({
@@ -56,7 +60,9 @@ const CardContent = ({ children, className = '' }: { children: React.ReactNode; 
 );
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
-	const [selectedRole, setSelectedRole] = useState<'receptionist' | 'professor' | 'superadmin' | null>(null);
+	const [selectedRole, setSelectedRole] = useState<
+		'receptionist' | 'professor' | 'superadmin' | 'sales' | null
+	>(null);
 	const [username, setUsername] = useState('');
 	const [password, setPassword] = useState('');
 	const [error, setError] = useState('');
@@ -76,6 +82,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 			{ id: 1, username: 'prof.mansouri', password: 'prof123', name: 'Prof. Mansouri', room: 'Room 7' },
 			{ id: 2, username: 'prof.bedaida', password: 'prof123', name: 'Prof. Bedaida', room: 'Room 8' },
 			{ id: 3, username: 'prof.touati', password: 'prof123', name: 'Prof. Touati', room: 'Room 9' },
+		],
+		sales: [
+			{ id: 1, username: 'samir.hadjout', password: 'sales123', name: 'Samir Hadjout' },
+			{ id: 2, username: 'samy.bouaddou', password: 'sales123', name: 'Samy Bouaddou' },
+			{ id: 3, username: 'imen.mouzaoui', password: 'sales123', name: 'Imen Mouzaoui' },
+			{ id: 4, username: 'wassim.benkhannouf', password: 'sales123', name: 'Wassim Benkhannouf' },
+			{ id: 5, username: 'gassbi.wassil', password: 'sales123', name: 'Gassbi Wassil' },
+			{ id: 6, username: 'adem.bentayeb', password: 'sales123', name: 'Adem Bentayeb' },
+			{ id: 7, username: 'lyna.guita', password: 'sales123', name: 'Lyna Guita' },
 		],
 	};
 
@@ -106,6 +121,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 					onLogin('professor', professor.id);
 				} else {
 					throw new Error('Invalid professor credentials');
+				}
+			} else if (selectedRole === 'sales') {
+				const salesperson = users.sales.find((s) => s.username === username && s.password === password);
+				if (salesperson) {
+					onLogin('sales', undefined, salesperson.id);
+				} else {
+					throw new Error('Invalid sales credentials');
 				}
 			}
 		} catch (err) {
@@ -168,6 +190,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 										<div className='text-sm text-gray-500'>View dashboard and room status</div>
 									</div>
 								</Button>
+
+								<Button
+									onClick={() => setSelectedRole('sales')}
+									variant='outline'
+									className='w-full justify-start h-16 text-left'>
+									<User className='h-6 w-6 mr-4 text-green-600' />
+									<div>
+										<div className='font-semibold text-green-600'>Sales</div>
+										<div className='text-sm text-gray-500'>Manage student admissions</div>
+									</div>
+								</Button>
 							</div>
 						) : (
 							<form onSubmit={handleLogin} className='space-y-4'>
@@ -181,9 +214,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 											<>
 												<User className='h-5 w-5' /> Receptionist Login
 											</>
-										) : (
+										) : selectedRole === 'professor' ? (
 											<>
 												<GraduationCap className='h-5 w-5' /> Professor Login
+											</>
+										) : (
+											<>
+												<User className='h-5 w-5 text-green-600' /> Sales Login
 											</>
 										)}
 									</div>
@@ -202,7 +239,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 										value={username}
 										onChange={(e) => setUsername(e.target.value)}
 										className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-										placeholder={selectedRole === 'receptionist' ? 'receptionist' : 'prof.username'}
+										placeholder={
+											selectedRole === 'receptionist'
+												? 'receptionist'
+												: selectedRole === 'sales'
+												? 'firstname.lastname'
+												: 'prof.username'
+										}
 										required
 									/>
 								</div>

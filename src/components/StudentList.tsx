@@ -43,6 +43,7 @@ interface StudentListProps {
 	onEditStudent?: (oldStudent: Student, newStudent: Student) => void;
 	isLoading?: boolean;
 	readOnly?: boolean;
+	userRole?: string;
 }
 
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -123,13 +124,17 @@ export const StudentList: React.FC<StudentListProps> = ({
 	onDeleteStudent,
 	onEditStudent,
 	isLoading = false,
-	readOnly = false
+	readOnly = false,
+	userRole = ''
 }) => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [editingStudent, setEditingStudent] = useState<string | null>(null);
 	const [editName, setEditName] = useState('');
 	const [editProgram, setEditProgram] = useState('');
 	const [showProgramDropdown, setShowProgramDropdown] = useState(false);
+
+	// Only superadmin can delete students from registry
+	const canDeleteStudents = userRole === 'superadmin';
 
 	const handleSearchChange = useCallback((value: string) => {
 		setSearchTerm(value);
@@ -320,7 +325,7 @@ export const StudentList: React.FC<StudentListProps> = ({
 													<Edit2 className='h-4 w-4' />
 												</Button>
 											)}
-											{!isCompleted && !isInInterview && !readOnly && (
+											{!isCompleted && !isInInterview && !readOnly && canDeleteStudents && (
 												<Button
 													onClick={() => onDeleteStudent(student)}
 													size='sm'

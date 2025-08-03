@@ -22,7 +22,7 @@ const Button = ({
 	disabled?: boolean;
 	className?: string;
 }) => {
-	const baseClasses = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50';
+	const baseClasses = 'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
 	
 	const variants = {
 		default: 'bg-primary text-primary-foreground hover:bg-primary/90',
@@ -32,7 +32,7 @@ const Button = ({
 	
 	const sizes = {
 		default: 'h-10 px-4 py-2',
-		sm: 'h-9 rounded-md px-3',
+		sm: 'h-9 px-3',
 		icon: 'h-10 w-10',
 	};
 	
@@ -177,101 +177,107 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 
 	return (
 		<div className={`relative ${className}`} ref={calendarRef}>
-			{/* Trigger Button */}
+			{/* Trigger Button - shadcn/ui style */}
 			<Button
 				variant="outline"
 				onClick={() => setIsOpen(!isOpen)}
-				className="w-full justify-start text-left font-normal"
+				className={`w-full justify-start text-left font-normal ${!value && 'text-muted-foreground'}`}
 			>
 				<CalendarIcon className="mr-2 h-4 w-4" />
-				{formatDisplayDate(value)}
+				<span>{formatDisplayDate(value)}</span>
 			</Button>
 
-			{/* Calendar Popover */}
+			{/* Calendar Popover - shadcn/ui style */}
 			{isOpen && (
-				<div className="absolute z-50 top-full mt-2 w-80 rounded-md border bg-popover p-3 text-popover-foreground shadow-md">
-					{/* Header */}
-					<div className="flex items-center justify-between mb-4">
-						<Button
-							variant="outline"
-							size="icon"
-							onClick={() => navigateMonth('prev')}
-							className="h-7 w-7"
-						>
-							<ChevronLeft className="h-4 w-4" />
-						</Button>
-						
-						<div className="font-semibold">
-							{monthName}
-						</div>
-						
-						<Button
-							variant="outline"
-							size="icon"
-							onClick={() => navigateMonth('next')}
-							className="h-7 w-7"
-						>
-							<ChevronRight className="h-4 w-4" />
-						</Button>
-					</div>
-
-					{/* Weekday Headers */}
-					<div className="grid grid-cols-7 gap-1 mb-2">
-						{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-							<div key={day} className="flex h-9 w-9 items-center justify-center text-sm font-medium text-muted-foreground">
-								{day}
-							</div>
-						))}
-					</div>
-
-					{/* Calendar Grid */}
-					<div className="grid grid-cols-7 gap-1">
-						{monthDays.map((dayObj, index) => (
-							<button
-								key={index}
-								onClick={() => selectDate(dayObj.date)}
-								className={`
-									flex h-9 w-9 items-center justify-center rounded-md text-sm transition-colors
-									${!dayObj.isCurrentMonth 
-										? 'text-muted-foreground opacity-50' 
-										: 'hover:bg-accent hover:text-accent-foreground'
-									}
-									${isSelectedDate(dayObj.date)
-										? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground'
-										: ''
-									}
-									${isToday(dayObj.date) && !isSelectedDate(dayObj.date)
-										? 'bg-accent text-accent-foreground'
-										: ''
-									}
-								`}
+				<div className="absolute z-50 mt-2 rounded-md border bg-popover p-3 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 w-auto p-0">
+					<div className="space-y-4 p-3">
+						{/* Header with navigation */}
+						<div className="flex items-center justify-between space-x-1">
+							<Button
+								variant="outline"
+								size="icon"
+								onClick={() => navigateMonth('prev')}
+								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
 							>
-								{dayObj.day}
-							</button>
-						))}
-					</div>
+								<ChevronLeft className="h-4 w-4" />
+							</Button>
+							
+							<div className="flex flex-1 justify-center text-sm font-medium">
+								{monthName}
+							</div>
+							
+							<Button
+								variant="outline"
+								size="icon"
+								onClick={() => navigateMonth('next')}
+								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+							>
+								<ChevronRight className="h-4 w-4" />
+							</Button>
+						</div>
 
-					{/* Footer */}
-					<div className="flex items-center justify-between mt-3 pt-3 border-t">
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={clearDate}
-							className="text-blue-600 hover:text-blue-700"
-						>
-							Clear
-						</Button>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={goToToday}
-							className="text-blue-600 hover:text-blue-700"
-						>
-							Today
-						</Button>
+						{/* Calendar grid */}
+						<div className="w-full space-y-2">
+							{/* Weekday headers */}
+							<div className="flex">
+								{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+									<div key={day} className="flex h-9 w-9 items-center justify-center text-xs font-normal text-muted-foreground">
+										{day}
+									</div>
+								))}
+							</div>
+
+							{/* Calendar days */}
+							<div className="grid grid-cols-7 gap-1">
+								{monthDays.map((dayObj, index) => (
+									<button
+										key={index}
+										onClick={() => selectDate(dayObj.date)}
+										className={`inline-flex h-9 w-9 items-center justify-center whitespace-nowrap rounded-md p-0 text-sm font-normal ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground
+											${!dayObj.isCurrentMonth 
+												? 'text-muted-foreground opacity-50' 
+												: ''
+											}
+											${isSelectedDate(dayObj.date)
+												? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground'
+												: ''
+											}
+											${isToday(dayObj.date) && !isSelectedDate(dayObj.date)
+												? 'bg-accent text-accent-foreground'
+												: ''
+											}
+										`}
+									>
+										{dayObj.day}
+									</button>
+								))}
+							</div>
+						</div>
+
+						{/* Footer with actions */}
+						<div className="flex items-center justify-between border-t pt-3">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={clearDate}
+								className="h-8 px-2 text-xs"
+							>
+								Clear
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={goToToday}
+								className="h-8 px-2 text-xs"
+							>
+								Today
+							</Button>
+						</div>
 					</div>
 				</div>
 			)}
 		</div>
 	);
 };
+
+export const CalendarComponent = Calendar;
