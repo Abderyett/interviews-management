@@ -9,9 +9,12 @@ import {
 	Edit2,
 	Trash2,
 	FileText,
+	BarChart3,
+	Users,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { CalendarComponent } from './Calendar';
+import { AdmissionDashboard } from './AdmissionDashboard';
 
 interface Student {
 	id?: number;
@@ -36,6 +39,7 @@ interface Student {
 	};
 	validation?: 'pending' | 'accepted' | 'rejected';
 	validationComment?: string;
+	studentStatus?: 'inscrit' | 'en_cours' | 'abandonner';
 	dateCreated: Date;
 	salesPersonId: number;
 	interviewDate?: string;
@@ -163,6 +167,47 @@ const VALIDATION_STATUS = [
 	{ value: 'rejected', label: 'Rejected' },
 ];
 
+const STUDENT_STATUS = [
+	{ value: 'inscrit', label: 'Inscrit' },
+	{ value: 'en_cours', label: 'En Cours' },
+	{ value: 'abandonner', label: 'Abandonner' },
+];
+
+// Sales person ID to name mapping (matches Login component)
+const SALES_PERSONS: { [key: number]: string } = {
+	1: 'Samir Hadjout',
+	2: 'Samy Bouaddou',
+	3: 'Imen Mouzaoui',
+	4: 'Wassim Benkhannouf',
+	5: 'Gassbi Wassil',
+	6: 'Adem Bentayeb',
+	7: 'Lyna Guita',
+};
+
+// Helper function to get sales person name
+const getSalesPersonName = (id: number): string => {
+	return SALES_PERSONS[id] || `Sales ID: ${id}`;
+};
+
+// Helper functions for student status
+const getStudentStatusLabel = (status?: string): string => {
+	const statusObj = STUDENT_STATUS.find(s => s.value === status);
+	return statusObj ? statusObj.label : 'N/A';
+};
+
+const getStudentStatusVariant = (status?: string): 'default' | 'secondary' | 'destructive' => {
+	switch (status) {
+		case 'inscrit':
+			return 'default'; // Green
+		case 'en_cours':
+			return 'secondary'; // Yellow
+		case 'abandonner':
+			return 'destructive'; // Red
+		default:
+			return 'secondary';
+	}
+};
+
 export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	userRole,
 	salesPersonId,
@@ -174,8 +219,13 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	const [showForm, setShowForm] = useState(false);
 	const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 	const [modalMode, setModalMode] = useState<'add' | 'edit' | 'test'>('add');
+	const [showDeleteModal, setShowDeleteModal] = useState(false);
+	const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 	const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 	const [filterSpecialite, setFilterSpecialite] = useState('');
+	const [filterSalesPerson, setFilterSalesPerson] = useState('');
+	const [filterTestRequired, setFilterTestRequired] = useState('');
+	const [showDashboard, setShowDashboard] = useState(false);
 
 	const [formData, setFormData] = useState<Partial<Student>>({
 		nom: '',
@@ -194,6 +244,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		testScores: {},
 		validation: 'pending',
 		validationComment: '',
+		studentStatus: 'en_cours',
 		interviewDate: '',
 	});
 
@@ -202,6 +253,9 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		anneeBac: false,
 		specialite: false,
 		validation: false,
+		salesPerson: false,
+		studentStatus: false,
+		testRequired: false,
 	});
 
 	// Calculate if test is required and average
@@ -222,7 +276,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 			}
 		}
 		return false;
-	}, [formData.specialite, formData.moyenneGenerale, formData.maths, formData.francais, formData.physique]);
+	}, [formData.specialite, formData.maths, formData.francais, formData.physique]);
 
 	// Helper functions for validation status display
 	const getValidationLabel = (validation?: string) => {
@@ -271,6 +325,18 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		return [];
 	};
 
+	// Get unique sales persons for filter dropdown
+	const uniqueSalesPersons = useMemo(() => {
+		const salesIds = [...new Set(students.map(s => s.salesPersonId))].sort((a, b) => a - b);
+		return salesIds.map(id => ({ value: id.toString(), label: getSalesPersonName(id) }));
+	}, [students]);
+
+	// Get sales persons data for dashboard
+	const salesPersonsData = useMemo(() => {
+		const salesIds = [...new Set(students.map(s => s.salesPersonId))].sort((a, b) => a - b);
+		return salesIds.map(id => ({ id, name: getSalesPersonName(id) }));
+	}, [students]);
+
 	// Filter students based on selected criteria
 	const filteredStudents = useMemo(() => {
 		let filtered = students;
@@ -284,13 +350,26 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		}
 
 		if (selectedDate) {
-			filtered = filtered.filter(
-				(s) => s.dateCreated.toDateString() === new Date(selectedDate).toDateString()
-			);
+			filtered = filtered.filter((s) => {
+				if (!s.interviewDate) return false;
+				return new Date(s.interviewDate).toDateString() === new Date(selectedDate).toDateString();
+			});
+		}
+
+		if (filterSalesPerson) {
+			filtered = filtered.filter((s) => s.salesPersonId.toString() === filterSalesPerson);
+		}
+
+		if (filterTestRequired) {
+			if (filterTestRequired === 'required') {
+				filtered = filtered.filter((s) => s.testRequired === true);
+			} else if (filterTestRequired === 'not_required') {
+				filtered = filtered.filter((s) => s.testRequired === false);
+			}
 		}
 
 		return filtered;
-	}, [students, userRole, salesPersonId, filterSpecialite, selectedDate]);
+	}, [students, userRole, salesPersonId, filterSpecialite, selectedDate, filterSalesPerson, filterTestRequired]);
 
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -337,6 +416,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 					testScores: formData.testScores,
 					validation: formData.validation || 'pending',
 					validationComment: formData.validationComment || '',
+					studentStatus: formData.studentStatus || 'en_cours',
 					dateCreated: new Date(),
 					salesPersonId: salesPersonId || 0,
 					interviewDate: formData.interviewDate,
@@ -398,17 +478,27 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setShowForm(true);
 	};
 
-	const handleDelete = (student: Student) => {
-		if (student.id && onDeleteStudent) {
-			if (confirm(`Are you sure you want to delete ${student.nom} ${student.prenom}?`)) {
-				onDeleteStudent(student.id);
-			}
-		}
-	};
-
 	const handleDropdownSelect = (field: string, value: string) => {
 		setFormData((prev) => ({ ...prev, [field]: value }));
 		setShowDropdowns((prev) => ({ ...prev, [field]: false }));
+	};
+
+	const handleDeleteClick = (student: Student) => {
+		setStudentToDelete(student);
+		setShowDeleteModal(true);
+	};
+
+	const handleConfirmDelete = () => {
+		if (studentToDelete?.id && onDeleteStudent) {
+			onDeleteStudent(studentToDelete.id);
+			setShowDeleteModal(false);
+			setStudentToDelete(null);
+		}
+	};
+
+	const handleCancelDelete = () => {
+		setShowDeleteModal(false);
+		setStudentToDelete(null);
 	};
 
 	return (
@@ -419,26 +509,56 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 					<h2 className='text-2xl font-bold'>Student Admission Management</h2>
 					<p className='text-muted-foreground'>Manage student applications and admissions</p>
 				</div>
-				{(userRole === 'sales' || userRole === 'superadmin') && (
-					<Button
-						onClick={() => {
-							setModalMode('add');
-							setShowForm(true);
-						}}
-						className='bg-green-600 hover:bg-green-700'>
-						<Plus className='h-4 w-4 mr-2' />
-						Add Student
-					</Button>
-				)}
+				<div className='flex gap-3'>
+					{(userRole === 'sales' || userRole === 'superadmin') && (
+						<Button
+							onClick={() => {
+								setModalMode('add');
+								setShowForm(true);
+							}}
+							className='bg-green-600 hover:bg-green-700'>
+							<Plus className='h-4 w-4 mr-2' />
+							Add Student
+						</Button>
+					)}
+					{userRole === 'superadmin' && (
+						<Button
+							onClick={() => setShowDashboard(!showDashboard)}
+							variant='outline'
+							className='border-purple-200 text-purple-600 hover:bg-purple-50'>
+							{showDashboard ? (
+								<>
+									<Users className='h-4 w-4 mr-2' />
+									Show Table
+								</>
+							) : (
+								<>
+									<BarChart3 className='h-4 w-4 mr-2' />
+									Show Dashboard
+								</>
+							)}
+						</Button>
+					)}
+				</div>
 			</div>
 
-			{/* Filters */}
-			<Card>
+			{/* Dashboard or Table View */}
+			{showDashboard && userRole === 'superadmin' ? (
+				<AdmissionDashboard 
+					students={students} 
+					salesPersons={salesPersonsData}
+					selectedDate={selectedDate}
+					onDateChange={setSelectedDate}
+				/>
+			) : (
+				<>
+					{/* Filters */}
+					<Card>
 				<CardHeader>
 					<CardTitle className='text-lg'>Filters</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+					<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
 						{/* Date Filter */}
 						<div>
 							<label className='block text-sm font-medium mb-2'>Date</label>
@@ -482,6 +602,100 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 												{spec.label}
 											</button>
 										))}
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* Sales Person Filter - Only show for superadmin */}
+						{userRole === 'superadmin' && (
+							<div>
+								<label className='block text-sm font-medium mb-2'>Sales Person</label>
+								<div className='relative'>
+									<button
+										type='button'
+										onClick={() => setShowDropdowns((prev) => ({ ...prev, salesPerson: !prev.salesPerson }))}
+										className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+										<span className={filterSalesPerson ? 'text-foreground' : 'text-muted-foreground'}>
+											{filterSalesPerson ? getSalesPersonName(parseInt(filterSalesPerson)) : 'All Sales Persons'}
+										</span>
+										<ChevronDown className='h-4 w-4' />
+									</button>
+
+									{showDropdowns.salesPerson && (
+										<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
+											<button
+												type='button'
+												onClick={() => {
+													setFilterSalesPerson('');
+													setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
+												}}
+												className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+												All Sales Persons
+											</button>
+											{uniqueSalesPersons.map((sales) => (
+												<button
+													key={sales.value}
+													type='button'
+													onClick={() => {
+														setFilterSalesPerson(sales.value);
+														setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
+													}}
+													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+													{sales.label}
+												</button>
+											))}
+										</div>
+									)}
+								</div>
+							</div>
+						)}
+
+						{/* Test Requirement Filter */}
+						<div>
+							<label className='block text-sm font-medium mb-2'>Test Requirement</label>
+							<div className='relative'>
+								<button
+									type='button'
+									onClick={() => setShowDropdowns((prev) => ({ ...prev, testRequired: !prev.testRequired }))}
+									className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+									<span className={filterTestRequired ? 'text-foreground' : 'text-muted-foreground'}>
+										{filterTestRequired === 'required' ? 'Test Required' : 
+										 filterTestRequired === 'not_required' ? 'No Test Required' : 
+										 'All Students'}
+									</span>
+									<ChevronDown className='h-4 w-4' />
+								</button>
+
+								{showDropdowns.testRequired && (
+									<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
+										<button
+											type='button'
+											onClick={() => {
+												setFilterTestRequired('');
+												setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
+											}}
+											className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+											All Students
+										</button>
+										<button
+											type='button'
+											onClick={() => {
+												setFilterTestRequired('required');
+												setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
+											}}
+											className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+											Test Required
+										</button>
+										<button
+											type='button'
+											onClick={() => {
+												setFilterTestRequired('not_required');
+												setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
+											}}
+											className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+											No Test Required
+										</button>
 									</div>
 								)}
 							</div>
@@ -819,6 +1033,42 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 										</div>
 									)}
 
+									{/* Student Status - Visible to all, editable by SuperAdmin only */}
+									{(userRole === 'superadmin' || userRole === 'sales') && (
+										<div className='relative'>
+											<label className='block text-sm font-medium mb-2'>Student Status</label>
+											<button
+												type='button'
+												onClick={() =>
+													setShowDropdowns((prev) => ({ ...prev, studentStatus: !prev.studentStatus }))
+												}
+												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'
+												disabled={userRole !== 'superadmin'}>
+												<span className={formData.studentStatus ? 'text-foreground' : 'text-muted-foreground'}>
+													{formData.studentStatus
+														? STUDENT_STATUS.find((status) => status.value === formData.studentStatus)
+																?.label || 'Select Status'
+														: 'Select Status'}
+												</span>
+												{userRole === 'superadmin' && <ChevronDown className='h-4 w-4' />}
+											</button>
+
+											{showDropdowns.studentStatus && userRole === 'superadmin' && (
+												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+													{STUDENT_STATUS.map((status) => (
+														<button
+															key={status.value}
+															type='button'
+															onClick={() => handleDropdownSelect('studentStatus', status.value)}
+															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+															{status.label}
+														</button>
+													))}
+												</div>
+											)}
+										</div>
+									)}
+
 									{/* Validation Comment - Visible to all, editable by SuperAdmin only */}
 									{(userRole === 'superadmin' || userRole === 'sales') && (
 										<div>
@@ -951,24 +1201,26 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 							No students found for the selected criteria.
 						</div>
 					) : (
-						<div className='overflow-x-auto'>
-							<table className='w-full border-collapse'>
+						<div className='overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100'>
+							<table className='w-full border-collapse min-w-max'>
 								<thead>
 									<tr className='border-b'>
-										<th className='text-left p-3'>Name</th>
-										<th className='text-left p-3'>Mobile</th>
-										<th className='text-left p-3'>Bac</th>
-										<th className='text-left p-3'>Specialité</th>
-										<th className='text-left p-3'>Scores</th>
-										<th className='text-left p-3'>Test</th>
-										<th className='text-left p-3'>Test Results</th>
-										<th className='text-left p-3'>Status</th>
+										<th className='text-left p-3 min-w-[150px]'>Name</th>
+										<th className='text-left p-3 min-w-[120px]'>Mobile</th>
+										<th className='text-left p-3 min-w-[100px]'>Bac</th>
+										<th className='text-left p-3 min-w-[100px]'>Specialité</th>
+										<th className='text-left p-3 min-w-[120px]'>Scores</th>
+										<th className='text-left p-3 min-w-[80px]'>Test</th>
+										<th className='text-left p-3 min-w-[120px]'>Test Results</th>
+										<th className='text-left p-3 min-w-[100px]'>Status</th>
+										<th className='text-left p-3 min-w-[120px]'>Student Status</th>
 										{(userRole === 'superadmin' || userRole === 'sales') && (
-											<th className='text-left p-3'>Comment</th>
+											<th className='text-left p-3 min-w-[150px]'>Comment</th>
 										)}
-										<th className='text-left p-3'>Interview Date</th>
-										<th className='text-left p-3'>Created</th>
-										<th className='text-left p-3'>Actions</th>
+										<th className='text-left p-3 min-w-[120px]'>Interview Date</th>
+										<th className='text-left p-3 min-w-[100px]'>Created</th>
+										<th className='text-left p-3 min-w-[120px]'>Sales Person</th>
+										<th className='text-left p-3 min-w-[100px]'>Actions</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -1071,6 +1323,11 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 													{getValidationLabel(student.validation)}
 												</Badge>
 											</td>
+											<td className='p-3'>
+												<Badge variant={getStudentStatusVariant(student.studentStatus)}>
+													{getStudentStatusLabel(student.studentStatus)}
+												</Badge>
+											</td>
 											{(userRole === 'superadmin' || userRole === 'sales') && (
 												<td className='p-3 text-sm text-muted-foreground max-w-48'>
 													{student.validationComment ? (
@@ -1094,6 +1351,9 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 											</td>
 											<td className='p-3 text-sm text-muted-foreground'>
 												{student.dateCreated.toLocaleDateString()}
+											</td>
+											<td className='p-3 text-sm text-muted-foreground'>
+												{getSalesPersonName(student.salesPersonId)}
 											</td>
 											<td className='p-3'>
 												<div className='flex gap-2'>
@@ -1124,7 +1384,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 													{/* Delete Button - Only for SuperAdmin */}
 													{userRole === 'superadmin' ? (
 														<Button
-															onClick={() => handleDelete(student)}
+															onClick={() => handleDeleteClick(student)}
 															size='sm'
 															variant='outline'
 															className='p-2 text-red-600 hover:text-red-700 hover:bg-red-50'>
@@ -1141,6 +1401,55 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 					)}
 				</CardContent>
 			</Card>
+
+				</>
+			)}
+
+			{/* Delete Confirmation Modal */}
+			<Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+				<DialogContent className='max-w-md'>
+					<DialogHeader>
+						<DialogTitle className='flex items-center gap-2 text-red-600'>
+							<AlertTriangle className='h-5 w-5' />
+							Confirm Deletion
+						</DialogTitle>
+					</DialogHeader>
+					<div className='py-4'>
+						<p className='text-gray-700 mb-4'>
+							Are you sure you want to delete this student?
+						</p>
+						{studentToDelete && (
+							<div className='bg-gray-50 p-3 rounded-lg'>
+								<p className='font-medium'>
+									{studentToDelete.nom} {studentToDelete.prenom}
+								</p>
+								<p className='text-sm text-gray-600'>
+									{studentToDelete.specialite} • {studentToDelete.mobile}
+								</p>
+							</div>
+						)}
+						<p className='text-sm text-red-600 mt-3'>
+							This action cannot be undone.
+						</p>
+					</div>
+					<div className='flex gap-3 justify-end'>
+						<Button
+							type='button'
+							variant='outline'
+							onClick={handleCancelDelete}>
+							Cancel
+						</Button>
+						<Button
+							type='button'
+							variant='destructive'
+							onClick={handleConfirmDelete}
+							className='bg-red-600 hover:bg-red-700'>
+							<Trash2 className='h-4 w-4 mr-2' />
+							Delete Student
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 };
