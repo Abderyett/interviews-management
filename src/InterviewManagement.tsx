@@ -970,7 +970,7 @@ const InterviewQueueSystem = () => {
 				}
 			}
 		},
-		[salesId, addAdmissionToRegistry]
+		[salesId, addAdmissionToRegistry, admissionStudents]
 	);
 
 	// Update admission student
