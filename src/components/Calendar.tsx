@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface CalendarProps {
 	value: string;
@@ -147,7 +147,7 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 		const day = String(date.getDate()).padStart(2, '0');
 		const dateString = `${year}-${month}-${day}`;
 		onChange(dateString);
-		setIsOpen(false);
+		// Don't close the calendar automatically - let user close it manually
 	};
 
 	const isSelectedDate = (date: Date) => {
@@ -213,6 +213,15 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
 							>
 								<ChevronRight className="h-4 w-4" />
+							</Button>
+							
+							<Button
+								variant="ghost"
+								size="icon"
+								onClick={() => setIsOpen(false)}
+								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+							>
+								<X className="h-4 w-4" />
 							</Button>
 						</div>
 

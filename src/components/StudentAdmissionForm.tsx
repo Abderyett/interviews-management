@@ -214,7 +214,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 				return average < 12;
 			}
 		} else if (formData.specialite === 'LFC') {
-			return formData.moyenneGenerale ? formData.moyenneGenerale < 12 : false;
+			return false;
 		} else if (formData.specialite === 'LINFO') {
 			if (formData.maths !== undefined && formData.physique !== undefined) {
 				const average = (formData.maths + formData.physique) / 2;
