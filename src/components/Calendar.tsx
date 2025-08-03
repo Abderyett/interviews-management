@@ -189,14 +189,20 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 
 			{/* Calendar Popover - shadcn/ui style */}
 			{isOpen && (
-				<div className="absolute z-50 mt-2 rounded-md border bg-popover p-3 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 w-auto p-0">
+				<div 
+					className="absolute z-[100] mt-2 rounded-md border bg-popover p-3 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 w-auto p-0"
+					onClick={(e) => e.stopPropagation()}
+				>
 					<div className="space-y-4 p-3">
 						{/* Header with navigation */}
 						<div className="flex items-center justify-between space-x-1">
 							<Button
 								variant="outline"
 								size="icon"
-								onClick={() => navigateMonth('prev')}
+								onClick={(e) => {
+									e.stopPropagation();
+									navigateMonth('prev');
+								}}
 								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
 							>
 								<ChevronLeft className="h-4 w-4" />
@@ -209,7 +215,10 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 							<Button
 								variant="outline"
 								size="icon"
-								onClick={() => navigateMonth('next')}
+								onClick={(e) => {
+									e.stopPropagation();
+									navigateMonth('next');
+								}}
 								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
 							>
 								<ChevronRight className="h-4 w-4" />
@@ -218,7 +227,10 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 							<Button
 								variant="ghost"
 								size="icon"
-								onClick={() => setIsOpen(false)}
+								onClick={(e) => {
+									e.stopPropagation();
+									setIsOpen(false);
+								}}
 								className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
 							>
 								<X className="h-4 w-4" />
@@ -241,7 +253,10 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 								{monthDays.map((dayObj, index) => (
 									<button
 										key={index}
-										onClick={() => selectDate(dayObj.date)}
+										onClick={(e) => {
+											e.stopPropagation();
+											selectDate(dayObj.date);
+										}}
 										className={`inline-flex h-9 w-9 items-center justify-center whitespace-nowrap rounded-md p-0 text-sm font-normal ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground
 											${!dayObj.isCurrentMonth 
 												? 'text-muted-foreground opacity-50' 
@@ -268,7 +283,10 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 							<Button
 								variant="ghost"
 								size="sm"
-								onClick={clearDate}
+								onClick={(e) => {
+									e.stopPropagation();
+									clearDate();
+								}}
 								className="h-8 px-2 text-xs"
 							>
 								Clear
@@ -276,7 +294,10 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 							<Button
 								variant="ghost"
 								size="sm"
-								onClick={goToToday}
+								onClick={(e) => {
+									e.stopPropagation();
+									goToToday();
+								}}
 								className="h-8 px-2 text-xs"
 							>
 								Today
