@@ -305,7 +305,12 @@ export const StudentList: React.FC<StudentListProps> = ({
 													In Interview
 												</div>
 											)}
-											{!isInQueue && !isCompleted && !readOnly && (
+											{isInQueue && !isInInterview && !isCompleted && (
+												<div className="text-sm text-orange-600 bg-orange-50 px-2 py-1 rounded">
+													In Queue
+												</div>
+											)}
+											{!isInQueue && !isCompleted && !isInInterview && !readOnly && (
 												<Button
 													onClick={() => onAddToQueue(student)}
 													size='sm'

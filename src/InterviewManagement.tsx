@@ -35,6 +35,7 @@ import { Login } from './components/Login';
 import { SimpleChatSystem } from './components/SimpleChatSystem';
 import { Calendar as CalendarComponent } from './components/Calendar';
 import { StudentAdmissionForm } from './components/StudentAdmissionForm';
+import { ProfessorInterviewForm } from './components/ProfessorInterviewForm';
 
 // Types
 interface Student {
@@ -72,7 +73,6 @@ interface Professor {
 }
 
 interface DateData {
-	registeredStudents: Student[];
 	waitingQueue: QueueEntry[];
 	completedInterviews: CompletedInterview[];
 	currentNumber: number;
@@ -103,17 +103,45 @@ interface AdmissionStudent {
 		cultureGenerale?: number;
 	};
 	validation?: 'pending' | 'accepted' | 'rejected';
+	validationComment?: string;
+	studentStatus?: 'inscrit' | 'en_cours' | 'abandonner';
 	dateCreated: Date;
 	salesPersonId: number;
 	interviewDate?: string;
 	licenceSpecialite?: string;
 	university?: string;
-	studentRegistryId?: string; // Links to student_id in students table
+	// Helper properties for interview system
+	studentId?: string; // Generated from nom + prenom
+	name?: string; // Full name for display
 }
 
 interface DeleteModalState {
 	show: boolean;
 	student: Student | null;
+}
+
+interface InterviewEvaluation {
+	studentId: number;
+	professorId: number;
+	situationEtudes: string;
+	motivationDomaine: number;
+	motivationDomaineComment: string;
+	motivationIFAG: number;
+	motivationIFAGComment: string;
+	projetEtudes: number;
+	projetEtudesComment: string;
+	projetProfessionnel: number;
+	projetProfessionnelComment: string;
+	aisanceVerbale: number;
+	aisanceVerbaleComment: string;
+	interactionJury: number;
+	interactionJuryComment: string;
+	cultureGenerale: number;
+	cultureGeneraleComment: string;
+	decisionJury: 'admis' | 'non_admis' | 'indecis';
+	commentaireGlobal: string;
+	membreJury: string;
+	dateEvaluation: Date;
 }
 
 type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
@@ -253,7 +281,6 @@ const InterviewQueueSystem = () => {
 	const getCurrentDateData = useCallback((): DateData => {
 		return (
 			dateData[selectedDate] || {
-				registeredStudents: [],
 				waitingQueue: [],
 				completedInterviews: [],
 				currentNumber: 1,
@@ -290,6 +317,19 @@ const InterviewQueueSystem = () => {
 		);
 	}, [dateData, selectedDate]);
 
+	// Get students for selected date from admission students
+	const getRegisteredStudents = useCallback((): Student[] => {
+		return admissionStudents
+			.filter(student => {
+				if (!student.interviewDate) return false;
+				return new Date(student.interviewDate).toDateString() === new Date(selectedDate).toDateString();
+			})
+			.map(student => ({
+				studentId: `${student.nom?.toLowerCase()}.${student.prenom?.toLowerCase()}`,
+				name: `${student.nom} ${student.prenom}`,
+			}));
+	}, [admissionStudents, selectedDate]);
+
 	const currentData = useMemo(() => getCurrentDateData(), [getCurrentDateData]);
 
 	// State for modals and undo
@@ -302,6 +342,9 @@ const InterviewQueueSystem = () => {
 	const [showUndoToast, setShowUndoToast] = useState(false);
 	const [lastQueueEntry, setLastQueueEntry] = useState<QueueEntry | null>(null);
 	const [showQueueUndoToast, setShowQueueUndoToast] = useState(false);
+	const [showInterviewForm, setShowInterviewForm] = useState(false);
+	const [currentInterviewStudent, setCurrentInterviewStudent] = useState<AdmissionStudent | null>(null);
+	const [completedEvaluations, setCompletedEvaluations] = useState<Set<string>>(new Set());
 
 	// Memoized available professors
 	const availableProfessors = useMemo(
@@ -344,11 +387,6 @@ const InterviewQueueSystem = () => {
 
 			// Transform and update data
 			const newDateData: DateData = {
-				registeredStudents:
-					studentsResult.data?.map((s) => ({
-						studentId: s.student_id,
-						name: s.name,
-					})) || [],
 				waitingQueue:
 					queueResult.data?.map((q) => ({
 						studentId: q.student_id,
@@ -703,6 +741,20 @@ const InterviewQueueSystem = () => {
 
 				console.log('Successfully completed interview');
 
+				// Clear the evaluation completion status for this student
+				const currentStudentAdmission = admissionStudents.find(
+					s => s.nom && s.prenom && 
+					`${s.nom} ${s.prenom}` === professor.currentStudent?.name
+				);
+				if (currentStudentAdmission?.id) {
+					const evaluationKey = `${currentStudentAdmission.id}-${professorId}`;
+					setCompletedEvaluations(prev => {
+						const newSet = new Set(prev);
+						newSet.delete(evaluationKey);
+						return newSet;
+					});
+				}
+
 				// Create completed interview object
 				const completedInterview: CompletedInterview = {
 					...professor.currentStudent,
@@ -740,7 +792,7 @@ const InterviewQueueSystem = () => {
 				setError(`Failed to complete interview: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			}
 		},
-		[currentData, selectedDate, loadDateData]
+		[currentData, selectedDate, loadDateData, admissionStudents]
 	);
 
 	// Generate unique student ID
@@ -775,9 +827,10 @@ const InterviewQueueSystem = () => {
 				const generatedId = generateStudentId(studentData.program, studentData.name);
 
 				// Ensure the generated ID is unique by checking against existing students
+				const registeredStudents = getRegisteredStudents();
 				let finalId = generatedId;
 				let counter = 1;
-				while (currentData.registeredStudents.some((s) => s.studentId === finalId)) {
+				while (registeredStudents.some((s) => s.studentId === finalId)) {
 					finalId = `${generatedId}${counter}`;
 					counter++;
 				}
@@ -793,20 +846,7 @@ const InterviewQueueSystem = () => {
 
 				console.log('Successfully added new student:', dbStudentData);
 
-				// Create student object
-				const newStudent: Student = {
-					name: studentData.name.trim(),
-					studentId: finalId,
-				};
-
-				// Update local state
-				setDateData((prev) => ({
-					...prev,
-					[selectedDate]: {
-						...currentData,
-						registeredStudents: [...currentData.registeredStudents, newStudent],
-					},
-				}));
+				// Note: Student is now managed through admission system, no local update needed
 
 				// Student added successfully - no undo toast needed
 			} catch (error) {
@@ -814,7 +854,7 @@ const InterviewQueueSystem = () => {
 				setError(`Failed to add student: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			}
 		},
-		[currentData, selectedDate, generateStudentId]
+		[selectedDate, generateStudentId, getRegisteredStudents]
 	);
 
 	// Add admission student to main registry for interview
@@ -834,19 +874,7 @@ const InterviewQueueSystem = () => {
 
 				console.log('Successfully added admission student to registry:', student);
 
-				// Update local state for the interview date
-				const newStudent: Student = {
-					studentId: student.studentId,
-					name: student.name,
-				};
-
-				setDateData((prev) => ({
-					...prev,
-					[interviewDate]: {
-						...prev[interviewDate],
-						registeredStudents: [...(prev[interviewDate]?.registeredStudents || []), newStudent],
-					},
-				}));
+				// Student now managed through admission system - no local state update needed
 			} catch (error) {
 				console.error('Error adding admission student to registry:', error);
 				setError(
@@ -1062,9 +1090,7 @@ const InterviewQueueSystem = () => {
 				...prev,
 				[selectedDate]: {
 					...currentData,
-					registeredStudents: currentData.registeredStudents.filter(
-						(s) => s.studentId !== lastAddedStudent.studentId
-					),
+					// Students now managed through admission system - no need to filter locally
 				},
 			}));
 
@@ -1469,9 +1495,7 @@ const InterviewQueueSystem = () => {
 					...prev,
 					[selectedDate]: {
 						...currentData,
-						registeredStudents: currentData.registeredStudents.filter(
-							(s: Student) => s.studentId !== student.studentId
-						),
+						// Students now managed through admission system - no need to filter locally
 						waitingQueue: currentData.waitingQueue.filter(
 							(s: QueueEntry) => s.studentId !== student.studentId
 						),
@@ -1549,9 +1573,7 @@ const InterviewQueueSystem = () => {
 					...prev,
 					[selectedDate]: {
 						...currentData,
-						registeredStudents: currentData.registeredStudents.map((s: Student) =>
-							s.studentId === oldStudent.studentId ? newStudent : s
-						),
+						// Students now managed through admission system - no need to map locally
 						waitingQueue: currentData.waitingQueue.map((q: QueueEntry) =>
 							q.studentId === oldStudent.studentId
 								? { ...q, name: newStudent.name, studentId: newStudent.studentId }
@@ -1679,6 +1701,63 @@ const InterviewQueueSystem = () => {
 		</div>
 	);
 
+	// Handle interview evaluation
+	const handleStartInterview = useCallback((student: AdmissionStudent) => {
+		setCurrentInterviewStudent(student);
+		setShowInterviewForm(true);
+	}, []);
+
+	const handleSaveInterviewEvaluation = useCallback(async (evaluation: InterviewEvaluation) => {
+		try {
+			setError(null);
+			
+			// Save evaluation to Supabase
+			const { error } = await supabase.from('interview_evaluations').insert({
+				student_id: evaluation.studentId,
+				professor_id: evaluation.professorId,
+				situation_etudes: evaluation.situationEtudes,
+				motivation_domaine: evaluation.motivationDomaine,
+				motivation_domaine_comment: evaluation.motivationDomaineComment,
+				motivation_ifag: evaluation.motivationIFAG,
+				motivation_ifag_comment: evaluation.motivationIFAGComment,
+				projet_etudes: evaluation.projetEtudes,
+				projet_etudes_comment: evaluation.projetEtudesComment,
+				projet_professionnel: evaluation.projetProfessionnel,
+				projet_professionnel_comment: evaluation.projetProfessionnelComment,
+				aisance_verbale: evaluation.aisanceVerbale,
+				aisance_verbale_comment: evaluation.aisanceVerbaleComment,
+				interaction_jury: evaluation.interactionJury,
+				interaction_jury_comment: evaluation.interactionJuryComment,
+				culture_generale: evaluation.cultureGenerale,
+				culture_generale_comment: evaluation.cultureGeneraleComment,
+				decision_jury: evaluation.decisionJury,
+				commentaire_global: evaluation.commentaireGlobal,
+				membre_jury: evaluation.membreJury,
+				date_evaluation: evaluation.dateEvaluation.toISOString(),
+				created_at: new Date().toISOString()
+			});
+
+			if (error) throw error;
+
+			console.log('Interview evaluation saved successfully');
+			
+			// Mark this student's evaluation as completed
+			const evaluationKey = `${evaluation.studentId}-${evaluation.professorId}`;
+			setCompletedEvaluations(prev => new Set(prev).add(evaluationKey));
+			
+			// Close the form
+			setShowInterviewForm(false);
+			setCurrentInterviewStudent(null);
+			
+			// Show success message
+			alert('Évaluation sauvegardée avec succès! Vous pouvez maintenant terminer l\'entretien.');
+			
+		} catch (error) {
+			console.error('Error saving interview evaluation:', error);
+			setError(`Failed to save evaluation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}, []);
+
 	const StudentsView = () => {
 		const isReadOnly = userRole === 'professor' || userRole === 'sales';
 
@@ -1693,7 +1772,7 @@ const InterviewQueueSystem = () => {
 						<CardContent className='p-6'>
 							<div className='flex items-center justify-between'>
 								<div>
-									<p className='text-2xl font-bold text-blue-600'>{currentData.registeredStudents.length}</p>
+									<p className='text-2xl font-bold text-blue-600'>{getRegisteredStudents().length}</p>
 									<p className='text-sm text-muted-foreground'>Total Students</p>
 								</div>
 								<Users className='h-4 w-4 text-blue-600' />
@@ -1795,7 +1874,7 @@ const InterviewQueueSystem = () => {
 					<div className='xl:col-span-5'>
 						<div className='space-y-4'>
 							<StudentList
-								students={currentData.registeredStudents}
+								students={getRegisteredStudents()}
 								waitingQueue={currentData.waitingQueue}
 								completedInterviews={currentData.completedInterviews}
 								professors={currentData.professors}
@@ -1810,7 +1889,7 @@ const InterviewQueueSystem = () => {
 								readOnly={isReadOnly}
 								userRole={userRole!}
 							/>
-							{!isReadOnly && <StudentForm onAddStudent={handleAddStudent} disabled={isLoading} />}
+							{userRole === 'superadmin' && <StudentForm onAddStudent={handleAddStudent} disabled={isLoading} />}
 						</div>
 					</div>
 					{/* Queue Management */}
@@ -2016,12 +2095,107 @@ const InterviewQueueSystem = () => {
 												</p>
 											)}
 											{professor?.currentStudent && (
-												<Button
-													onClick={() => completeInterview(professorId)}
-													className='w-full bg-green-600 hover:bg-green-700 text-white transition-colors duration-200'>
-													<CheckCircle className='h-4 w-4 mr-2' />
-													Complete Interview
-												</Button>
+												<div className='space-y-3'>
+													{(() => {
+														// Check if evaluation has been completed for this student
+														const currentStudentAdmission = admissionStudents.find(
+															s => s.nom && s.prenom && 
+															`${s.nom} ${s.prenom}` === professor.currentStudent?.name
+														);
+														const evaluationKey = currentStudentAdmission?.id ? `${currentStudentAdmission.id}-${professorId}` : null;
+														const hasCompletedEvaluation = evaluationKey ? completedEvaluations.has(evaluationKey) : false;
+
+														if (!hasCompletedEvaluation) {
+															// Show evaluation button if evaluation not completed
+															return (
+																<Button
+																	onClick={async () => {
+																		console.log('Looking for student:', professor.currentStudent?.name);
+																		console.log('Available admission students:', admissionStudents.map(s => `${s.nom} ${s.prenom}`));
+																		
+																		// If no admission students loaded, try to reload them
+																		if (admissionStudents.length === 0) {
+																			console.log('No admission students loaded, reloading...');
+																			try {
+																				await loadAdmissionStudents();
+																			} catch (error) {
+																				console.error('Failed to reload admission students:', error);
+																				alert('Failed to load student data. Please try again.');
+																				return;
+																			}
+																		}
+																		
+																		// Find the admission student that matches the current student
+																		// Try multiple matching strategies
+																		let admissionStudent = admissionStudents.find(
+																			s => s.nom && s.prenom && 
+																			`${s.nom} ${s.prenom}` === professor.currentStudent?.name
+																		);
+																		
+																		// If exact match fails, try case-insensitive match
+																		if (!admissionStudent) {
+																			admissionStudent = admissionStudents.find(
+																				s => s.nom && s.prenom && 
+																				`${s.nom} ${s.prenom}`.toLowerCase() === professor.currentStudent?.name?.toLowerCase()
+																			);
+																		}
+																		
+																		// If still no match, try matching by studentId (last resort)
+																		if (!admissionStudent && professor.currentStudent?.studentId) {
+																			admissionStudent = admissionStudents.find(
+																				s => s.nom && s.prenom && 
+																				`${s.nom?.toLowerCase()}.${s.prenom?.toLowerCase()}` === professor.currentStudent?.studentId
+																			);
+																		}
+																		
+																		// If still no match, try partial name matching
+																		if (!admissionStudent && professor.currentStudent?.name) {
+																			const currentName = professor.currentStudent.name.toLowerCase();
+																			admissionStudent = admissionStudents.find(
+																				s => s.nom && s.prenom && 
+																				(currentName.includes(s.nom.toLowerCase()) && currentName.includes(s.prenom.toLowerCase()))
+																			);
+																		}
+																		
+																		if (admissionStudent) {
+																			console.log('Found matching student:', admissionStudent);
+																			handleStartInterview(admissionStudent);
+																		} else {
+																			console.error('No matching student found');
+																			console.log('Current student details:', professor.currentStudent);
+																			console.log('All admission students:', admissionStudents);
+																			alert(`Student data not found in admission system.\n\nLooking for: "${professor.currentStudent?.name}" or "${professor.currentStudent?.studentId}"\n\nAvailable students: ${admissionStudents.map(s => `${s.nom} ${s.prenom}`).join(', ')}`);
+																		}
+																	}}
+																	className='w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200'>
+																	<GraduationCap className='h-4 w-4 mr-2' />
+																	Evaluate Student
+																</Button>
+															);
+														} else {
+															// Show completion message and complete interview button
+															return (
+																<div className='space-y-3'>
+																	<div className='p-4 bg-green-50 border border-green-200 rounded-lg'>
+																		<div className='flex items-center'>
+																			<CheckCircle className='h-5 w-5 text-green-600 mr-2' />
+																			<span className='text-green-800 font-medium'>Évaluation terminée</span>
+																		</div>
+																		<p className='text-green-700 text-sm mt-1'>
+																			L'évaluation de cet étudiant est maintenant terminée.
+																		</p>
+																	</div>
+																	<Button
+																		onClick={() => completeInterview(professorId)}
+																		className='w-full bg-green-600 hover:bg-green-700 text-white transition-colors duration-200'>
+																		<CheckCircle className='h-4 w-4 mr-2' />
+																		Complete Interview
+																	</Button>
+																</div>
+															);
+														}
+													})()}
+												</div>
 											)}
 										</div>
 									) : (
@@ -2424,6 +2598,20 @@ const InterviewQueueSystem = () => {
 						<X className='h-4 w-4' />
 					</Button>
 				</div>
+			)}
+
+			{/* Professor Interview Evaluation Form */}
+			{showInterviewForm && currentInterviewStudent && professorId && (
+				<ProfessorInterviewForm
+					student={currentInterviewStudent}
+					professorId={professorId}
+					onSave={handleSaveInterviewEvaluation}
+					onClose={() => {
+						setShowInterviewForm(false);
+						setCurrentInterviewStudent(null);
+					}}
+					isVisible={showInterviewForm}
+				/>
 			)}
 		</div>
 	);

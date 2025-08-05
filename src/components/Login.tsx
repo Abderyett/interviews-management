@@ -176,7 +176,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 									<User className='h-6 w-6 mr-4' />
 									<div>
 										<div className='font-semibold'>Receptionist</div>
-										<div className='text-sm text-gray-500'>Manage students and interviews</div>
+										<div className='text-sm text-gray-500'>Manage interview queues</div>
 									</div>
 								</Button>
 

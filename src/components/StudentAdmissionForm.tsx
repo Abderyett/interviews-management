@@ -11,10 +11,13 @@ import {
 	FileText,
 	BarChart3,
 	Users,
+	Eye,
+	Star,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { CalendarComponent } from './Calendar';
 import { AdmissionDashboard } from './AdmissionDashboard';
+import { supabase } from '../lib/supabase';
 
 interface Student {
 	id?: number;
@@ -45,6 +48,32 @@ interface Student {
 	interviewDate?: string;
 }
 
+interface InterviewEvaluation {
+	id: number;
+	student_id: number;
+	professor_id: number;
+	situation_etudes: string;
+	motivation_domaine: number;
+	motivation_domaine_comment: string;
+	motivation_ifag: number;
+	motivation_ifag_comment: string;
+	projet_etudes: number;
+	projet_etudes_comment: string;
+	projet_professionnel: number;
+	projet_professionnel_comment: string;
+	aisance_verbale: number;
+	aisance_verbale_comment: string;
+	interaction_jury: number;
+	interaction_jury_comment: string;
+	culture_generale: number;
+	culture_generale_comment: string;
+	decision_jury: 'admis' | 'non_admis' | 'indecis';
+	commentaire_global: string;
+	membre_jury: string;
+	date_evaluation: string;
+	created_at: string;
+}
+
 interface StudentAdmissionFormProps {
 	userRole: 'sales' | 'superadmin';
 	salesPersonId?: number;
@@ -63,6 +92,7 @@ const Button = ({
 	disabled = false,
 	className = '',
 	type = 'button',
+	title,
 }: {
 	children: React.ReactNode;
 	onClick?: () => void;
@@ -71,6 +101,7 @@ const Button = ({
 	disabled?: boolean;
 	className?: string;
 	type?: 'button' | 'submit';
+	title?: string;
 }) => {
 	const baseClasses =
 		'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
@@ -91,7 +122,8 @@ const Button = ({
 			type={type}
 			className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
 			onClick={onClick}
-			disabled={disabled}>
+			disabled={disabled}
+			title={title}>
 			{children}
 		</button>
 	);
@@ -116,9 +148,11 @@ const CardContent = ({ children, className = '' }: { children: React.ReactNode; 
 const Badge = ({
 	children,
 	variant = 'default',
+	className = '',
 }: {
 	children: React.ReactNode;
 	variant?: 'default' | 'destructive' | 'outline' | 'warning' | 'secondary';
+	className?: string;
 }) => {
 	const variants = {
 		default: 'bg-blue-100 text-blue-800',
@@ -130,7 +164,7 @@ const Badge = ({
 
 	return (
 		<span
-			className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]}`}>
+			className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>
 			{children}
 		</span>
 	);
@@ -191,7 +225,7 @@ const getSalesPersonName = (id: number): string => {
 
 // Helper functions for student status
 const getStudentStatusLabel = (status?: string): string => {
-	const statusObj = STUDENT_STATUS.find(s => s.value === status);
+	const statusObj = STUDENT_STATUS.find((s) => s.value === status);
 	return statusObj ? statusObj.label : 'N/A';
 };
 
@@ -226,6 +260,9 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	const [filterSalesPerson, setFilterSalesPerson] = useState('');
 	const [filterTestRequired, setFilterTestRequired] = useState('');
 	const [showDashboard, setShowDashboard] = useState(false);
+	const [selectedEvaluation, setSelectedEvaluation] = useState<InterviewEvaluation | null>(null);
+	const [showEvaluationModal, setShowEvaluationModal] = useState(false);
+	const [loadingEvaluation, setLoadingEvaluation] = useState(false);
 
 	const [formData, setFormData] = useState<Partial<Student>>({
 		nom: '',
@@ -327,14 +364,14 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 
 	// Get unique sales persons for filter dropdown
 	const uniqueSalesPersons = useMemo(() => {
-		const salesIds = [...new Set(students.map(s => s.salesPersonId))].sort((a, b) => a - b);
-		return salesIds.map(id => ({ value: id.toString(), label: getSalesPersonName(id) }));
+		const salesIds = [...new Set(students.map((s) => s.salesPersonId))].sort((a, b) => a - b);
+		return salesIds.map((id) => ({ value: id.toString(), label: getSalesPersonName(id) }));
 	}, [students]);
 
 	// Get sales persons data for dashboard
 	const salesPersonsData = useMemo(() => {
-		const salesIds = [...new Set(students.map(s => s.salesPersonId))].sort((a, b) => a - b);
-		return salesIds.map(id => ({ id, name: getSalesPersonName(id) }));
+		const salesIds = [...new Set(students.map((s) => s.salesPersonId))].sort((a, b) => a - b);
+		return salesIds.map((id) => ({ id, name: getSalesPersonName(id) }));
 	}, [students]);
 
 	// Filter students based on selected criteria
@@ -369,7 +406,15 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		}
 
 		return filtered;
-	}, [students, userRole, salesPersonId, filterSpecialite, selectedDate, filterSalesPerson, filterTestRequired]);
+	}, [
+		students,
+		userRole,
+		salesPersonId,
+		filterSpecialite,
+		selectedDate,
+		filterSalesPerson,
+		filterTestRequired,
+	]);
 
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -501,14 +546,48 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setStudentToDelete(null);
 	};
 
+	const handleViewEvaluation = async (student: Student) => {
+		if (!student.id) {
+			alert('ID etudiant manquant');
+			return;
+		}
+
+		setLoadingEvaluation(true);
+		try {
+			const { data, error } = await supabase
+				.from('interview_evaluations')
+				.select('*')
+				.eq('student_id', student.id)
+				.single();
+
+			if (error) {
+				if (error.code === 'PGRST116') {
+					alert('Aucune evaluation d\'entretien trouvee pour cet etudiant');
+				} else {
+					console.error('Error fetching evaluation:', error);
+					alert('Erreur lors du chargement de l\'evaluation');
+				}
+				return;
+			}
+
+			setSelectedEvaluation(data);
+			setShowEvaluationModal(true);
+		} catch (error) {
+			console.error('Error:', error);
+			alert('Erreur lors du chargement de l\'evaluation');
+		} finally {
+			setLoadingEvaluation(false);
+		}
+	};
+
 	return (
 		<div className='space-y-6'>
 			{/* Header */}
 			<div className='flex justify-between items-center'>
-				<div>
+				{/* <div>
 					<h2 className='text-2xl font-bold'>Student Admission Management</h2>
 					<p className='text-muted-foreground'>Manage student applications and admissions</p>
-				</div>
+				</div> */}
 				<div className='flex gap-3'>
 					{(userRole === 'sales' || userRole === 'superadmin') && (
 						<Button
@@ -544,8 +623,8 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 
 			{/* Dashboard or Table View */}
 			{showDashboard && userRole === 'superadmin' ? (
-				<AdmissionDashboard 
-					students={students} 
+				<AdmissionDashboard
+					students={students}
 					salesPersons={salesPersonsData}
 					selectedDate={selectedDate}
 					onDateChange={setSelectedDate}
@@ -554,854 +633,884 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 				<>
 					{/* Filters */}
 					<Card>
-				<CardHeader>
-					<CardTitle className='text-lg'>Filters</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
-						{/* Date Filter */}
-						<div>
-							<label className='block text-sm font-medium mb-2'>Date</label>
-							<CalendarComponent value={selectedDate} onChange={setSelectedDate} className='w-full' />
-						</div>
+						<CardHeader>
+							<CardTitle className='text-lg'>Filters</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+								{/* Date Filter */}
+								<div>
+									<label className='block text-sm font-medium mb-2'>Date</label>
+									<CalendarComponent value={selectedDate} onChange={setSelectedDate} className='w-full' />
+								</div>
 
-						{/* Specialite Filter */}
-						<div>
-							<label className='block text-sm font-medium mb-2'>Specialité</label>
-							<div className='relative'>
-								<button
-									type='button'
-									onClick={() => setShowDropdowns((prev) => ({ ...prev, specialite: !prev.specialite }))}
-									className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-									<span className={filterSpecialite ? 'text-foreground' : 'text-muted-foreground'}>
-										{filterSpecialite || 'All Specialités'}
-									</span>
-									<ChevronDown className='h-4 w-4' />
-								</button>
-
-								{showDropdowns.specialite && (
-									<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
+								{/* Specialite Filter */}
+								<div>
+									<label className='block text-sm font-medium mb-2'>Specialité</label>
+									<div className='relative'>
 										<button
 											type='button'
-											onClick={() => {
-												setFilterSpecialite('');
-												setShowDropdowns((prev) => ({ ...prev, specialite: false }));
-											}}
-											className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-											All Specialités
+											onClick={() => setShowDropdowns((prev) => ({ ...prev, specialite: !prev.specialite }))}
+											className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+											<span className={filterSpecialite ? 'text-foreground' : 'text-muted-foreground'}>
+												{filterSpecialite || 'All Specialités'}
+											</span>
+											<ChevronDown className='h-4 w-4' />
 										</button>
-										{SPECIALITES.map((spec) => (
-											<button
-												key={spec.value}
-												type='button'
-												onClick={() => {
-													setFilterSpecialite(spec.value);
-													setShowDropdowns((prev) => ({ ...prev, specialite: false }));
-												}}
-												className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-												{spec.label}
-											</button>
-										))}
-									</div>
-								)}
-							</div>
-						</div>
 
-						{/* Sales Person Filter - Only show for superadmin */}
-						{userRole === 'superadmin' && (
-							<div>
-								<label className='block text-sm font-medium mb-2'>Sales Person</label>
-								<div className='relative'>
-									<button
-										type='button'
-										onClick={() => setShowDropdowns((prev) => ({ ...prev, salesPerson: !prev.salesPerson }))}
-										className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-										<span className={filterSalesPerson ? 'text-foreground' : 'text-muted-foreground'}>
-											{filterSalesPerson ? getSalesPersonName(parseInt(filterSalesPerson)) : 'All Sales Persons'}
-										</span>
-										<ChevronDown className='h-4 w-4' />
-									</button>
-
-									{showDropdowns.salesPerson && (
-										<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
-											<button
-												type='button'
-												onClick={() => {
-													setFilterSalesPerson('');
-													setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
-												}}
-												className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-												All Sales Persons
-											</button>
-											{uniqueSalesPersons.map((sales) => (
+										{showDropdowns.specialite && (
+											<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
 												<button
-													key={sales.value}
 													type='button'
 													onClick={() => {
-														setFilterSalesPerson(sales.value);
-														setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
+														setFilterSpecialite('');
+														setShowDropdowns((prev) => ({ ...prev, specialite: false }));
 													}}
 													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-													{sales.label}
+													All Specialités
 												</button>
-											))}
-										</div>
-									)}
+												{SPECIALITES.map((spec) => (
+													<button
+														key={spec.value}
+														type='button'
+														onClick={() => {
+															setFilterSpecialite(spec.value);
+															setShowDropdowns((prev) => ({ ...prev, specialite: false }));
+														}}
+														className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+														{spec.label}
+													</button>
+												))}
+											</div>
+										)}
+									</div>
 								</div>
-							</div>
-						)}
 
-						{/* Test Requirement Filter */}
-						<div>
-							<label className='block text-sm font-medium mb-2'>Test Requirement</label>
-							<div className='relative'>
-								<button
-									type='button'
-									onClick={() => setShowDropdowns((prev) => ({ ...prev, testRequired: !prev.testRequired }))}
-									className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-									<span className={filterTestRequired ? 'text-foreground' : 'text-muted-foreground'}>
-										{filterTestRequired === 'required' ? 'Test Required' : 
-										 filterTestRequired === 'not_required' ? 'No Test Required' : 
-										 'All Students'}
-									</span>
-									<ChevronDown className='h-4 w-4' />
-								</button>
+								{/* Sales Person Filter - Only show for superadmin */}
+								{userRole === 'superadmin' && (
+									<div>
+										<label className='block text-sm font-medium mb-2'>Sales Person</label>
+										<div className='relative'>
+											<button
+												type='button'
+												onClick={() =>
+													setShowDropdowns((prev) => ({ ...prev, salesPerson: !prev.salesPerson }))
+												}
+												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+												<span className={filterSalesPerson ? 'text-foreground' : 'text-muted-foreground'}>
+													{filterSalesPerson
+														? getSalesPersonName(parseInt(filterSalesPerson))
+														: 'All Sales Persons'}
+												</span>
+												<ChevronDown className='h-4 w-4' />
+											</button>
 
-								{showDropdowns.testRequired && (
-									<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
-										<button
-											type='button'
-											onClick={() => {
-												setFilterTestRequired('');
-												setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
-											}}
-											className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-											All Students
-										</button>
-										<button
-											type='button'
-											onClick={() => {
-												setFilterTestRequired('required');
-												setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
-											}}
-											className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-											Test Required
-										</button>
-										<button
-											type='button'
-											onClick={() => {
-												setFilterTestRequired('not_required');
-												setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
-											}}
-											className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-											No Test Required
-										</button>
+											{showDropdowns.salesPerson && (
+												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
+													<button
+														type='button'
+														onClick={() => {
+															setFilterSalesPerson('');
+															setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
+														}}
+														className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+														All Sales Persons
+													</button>
+													{uniqueSalesPersons.map((sales) => (
+														<button
+															key={sales.value}
+															type='button'
+															onClick={() => {
+																setFilterSalesPerson(sales.value);
+																setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
+															}}
+															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+															{sales.label}
+														</button>
+													))}
+												</div>
+											)}
+										</div>
 									</div>
 								)}
-							</div>
-						</div>
-					</div>
-				</CardContent>
-			</Card>
 
-			{/* Student Form Modal */}
-			<Dialog
-				open={showForm}
-				onOpenChange={(open) => {
-					if (!open) resetForm();
-					setShowForm(open);
-				}}>
-				<DialogContent className='max-w-2xl max-h-[95vh] overflow-y-auto'>
-					<DialogHeader>
-						<DialogTitle>
-							{modalMode === 'add'
-								? 'Add New Student'
-								: modalMode === 'edit'
-								? 'Edit Student'
-								: 'Add Test Results'}
-						</DialogTitle>
-					</DialogHeader>
-					<div className='space-y-4'>
-						<form onSubmit={handleSubmit} className='space-y-4'>
-							{modalMode !== 'test' && (
-								<>
-									{/* Basic Info */}
-									<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-										<div>
-											<label className='block text-sm font-medium mb-2'>Nom *</label>
-											<input
-												type='text'
-												value={formData.nom}
-												onChange={(e) => setFormData((prev) => ({ ...prev, nom: e.target.value }))}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-												required
-											/>
-										</div>
-										<div>
-											<label className='block text-sm font-medium mb-2'>Prénom *</label>
-											<input
-												type='text'
-												value={formData.prenom}
-												onChange={(e) => setFormData((prev) => ({ ...prev, prenom: e.target.value }))}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-												required
-											/>
-										</div>
-									</div>
-
-									<div>
-										<label className='block text-sm font-medium mb-2'>Mobile *</label>
-										<input
-											type='tel'
-											value={formData.mobile}
-											onChange={(e) => setFormData((prev) => ({ ...prev, mobile: e.target.value }))}
-											className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-											required
-										/>
-									</div>
-
-									<div>
-										<label className='block text-sm font-medium mb-2'>Interview Date</label>
-										<CalendarComponent
-											value={formData.interviewDate || ''}
-											onChange={(date) => setFormData((prev) => ({ ...prev, interviewDate: date }))}
-											className='w-full'
-										/>
-										<p className='text-xs text-gray-500 mt-1'>
-											Select a date to automatically add student to interview registry
-										</p>
-									</div>
-
-									{/* Dropdowns */}
-									<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-										{/* Bac Type */}
-										<div className='relative'>
-											<label className='block text-sm font-medium mb-2'>Type Bac *</label>
-											<button
-												type='button'
-												onClick={() => setShowDropdowns((prev) => ({ ...prev, bacType: !prev.bacType }))}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-												<span className={formData.bacType ? 'text-foreground' : 'text-muted-foreground'}>
-													{formData.bacType
-														? BAC_TYPES.find((b) => b.value === formData.bacType)?.label
-														: 'Select Bac Type'}
-												</span>
-												<ChevronDown className='h-4 w-4' />
-											</button>
-
-											{showDropdowns.bacType && (
-												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-													{BAC_TYPES.map((bac) => (
-														<button
-															key={bac.value}
-															type='button'
-															onClick={() => handleDropdownSelect('bacType', bac.value)}
-															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-															{bac.label}
-														</button>
-													))}
-												</div>
-											)}
-										</div>
-
-										{/* Année Bac */}
-										<div className='relative'>
-											<label className='block text-sm font-medium mb-2'>Année Bac *</label>
-											<button
-												type='button'
-												onClick={() => setShowDropdowns((prev) => ({ ...prev, anneeBac: !prev.anneeBac }))}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-												<span className={formData.anneeBac ? 'text-foreground' : 'text-muted-foreground'}>
-													{formData.anneeBac || 'Select Year'}
-												</span>
-												<ChevronDown className='h-4 w-4' />
-											</button>
-
-											{showDropdowns.anneeBac && (
-												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-													{ANNEE_BAC.map((annee) => (
-														<button
-															key={annee.value}
-															type='button'
-															onClick={() => handleDropdownSelect('anneeBac', annee.value)}
-															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-															{annee.label}
-														</button>
-													))}
-												</div>
-											)}
-										</div>
-
-										{/* Specialité */}
-										<div className='relative'>
-											<label className='block text-sm font-medium mb-2'>Spécialité *</label>
-											<button
-												type='button'
-												onClick={() =>
-													setShowDropdowns((prev) => ({ ...prev, specialite: !prev.specialite }))
-												}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-												<span className={formData.specialite ? 'text-foreground' : 'text-muted-foreground'}>
-													{formData.specialite
-														? SPECIALITES.find((s) => s.value === formData.specialite)?.label
-														: 'Select Specialité'}
-												</span>
-												<ChevronDown className='h-4 w-4' />
-											</button>
-
-											{showDropdowns.specialite && (
-												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-													{SPECIALITES.map((spec) => (
-														<button
-															key={spec.value}
-															type='button'
-															onClick={() => handleDropdownSelect('specialite', spec.value)}
-															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-															{spec.label}
-														</button>
-													))}
-												</div>
-											)}
-										</div>
-									</div>
-
-									{/* Academic Scores - For LAC, LFC, and LINFO */}
-									{(formData.specialite === 'LAC' ||
-										formData.specialite === 'LFC' ||
-										formData.specialite === 'LINFO') && (
-										<div>
-											<h4 className='font-medium mb-3'>Academic Scores</h4>
-											<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-												{getSpecializedFields().map((field) => (
-													<div key={field}>
-														<label className='block text-sm font-medium mb-2'>
-															{field === 'moyenneGenerale'
-																? 'Moyenne Générale'
-																: field === 'maths'
-																? 'Maths'
-																: field === 'francais'
-																? 'Français'
-																: field === 'physique'
-																? 'Physique'
-																: field}{' '}
-															*
-														</label>
-														<input
-															type='number'
-															step='0.01'
-															min='0'
-															max='20'
-															value={(formData[field as keyof Student] as number) || ''}
-															onChange={(e) =>
-																setFormData((prev) => ({
-																	...prev,
-																	[field]: parseFloat(e.target.value),
-																}))
-															}
-															className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-															required
-														/>
-													</div>
-												))}
-											</div>
-										</div>
-									)}
-
-									{/* Master Program Fields - Only for MASTER MM and MASTER TD */}
-									{(formData.specialite === 'MASTER_MM' || formData.specialite === 'MASTER_TD') && (
-										<div>
-											<h4 className='font-medium mb-3'>Licence Information</h4>
-											<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-												{getMasterFields().map((field) => (
-													<div key={field}>
-														<label className='block text-sm font-medium mb-2'>
-															{field === 'licenceSpecialite'
-																? 'Licence Spécialité'
-																: field === 'university'
-																? 'University'
-																: field}{' '}
-															*
-														</label>
-														<input
-															type='text'
-															value={(formData[field as keyof Student] as string) || ''}
-															onChange={(e) =>
-																setFormData((prev) => ({
-																	...prev,
-																	[field]: e.target.value,
-																}))
-															}
-															className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-															required
-															placeholder={
-																field === 'licenceSpecialite'
-																	? 'e.g., Informatique, Mathématiques'
-																	: 'e.g., Université de Tunis'
-															}
-														/>
-													</div>
-												))}
-											</div>
-										</div>
-									)}
-
-									{/* Test Required Badge */}
-									{testRequired && (
-										<div className='flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg'>
-											<AlertTriangle className='h-5 w-5 text-yellow-600' />
-											<Badge variant='warning'>Test Required</Badge>
-											<span className='text-sm text-yellow-700'>
-												Average below 12 - entrance test required
-											</span>
-										</div>
-									)}
-
-									{/* Test Scores */}
-									{testRequired && (
-										<div>
-											<h4 className='font-medium mb-3'>Test Scores</h4>
-											<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-												{getTestFields().map((field) => (
-													<div key={field}>
-														<label className='block text-sm font-medium mb-2'>
-															Note{' '}
-															{field === 'maths'
-																? 'Maths'
-																: field === 'logique'
-																? 'Logique'
-																: field === 'francais'
-																? 'Français'
-																: field === 'cultureGenerale'
-																? 'Culture Générale'
-																: field}
-														</label>
-														<input
-															type='number'
-															step='0.01'
-															min='0'
-															max='20'
-															value={formData.testScores?.[field as keyof typeof formData.testScores] || ''}
-															onChange={(e) =>
-																setFormData((prev) => ({
-																	...prev,
-																	testScores: {
-																		...prev.testScores,
-																		[field]: parseFloat(e.target.value),
-																	},
-																}))
-															}
-															className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-														/>
-													</div>
-												))}
-											</div>
-										</div>
-									)}
-
-									{/* Validation - Only for SuperAdmin */}
-									{userRole === 'superadmin' && (
-										<div className='relative'>
-											<label className='block text-sm font-medium mb-2'>Validation</label>
-											<button
-												type='button'
-												onClick={() =>
-													setShowDropdowns((prev) => ({ ...prev, validation: !prev.validation }))
-												}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-												<span className={formData.validation ? 'text-foreground' : 'text-muted-foreground'}>
-													{formData.validation
-														? VALIDATION_STATUS.find((status) => status.value === formData.validation)
-																?.label || 'Select Status'
-														: 'Select Status'}
-												</span>
-												<ChevronDown className='h-4 w-4' />
-											</button>
-
-											{showDropdowns.validation && (
-												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-													{VALIDATION_STATUS.map((status) => (
-														<button
-															key={status.value}
-															type='button'
-															onClick={() => handleDropdownSelect('validation', status.value)}
-															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-															{status.label}
-														</button>
-													))}
-												</div>
-											)}
-										</div>
-									)}
-
-									{/* Student Status - Visible to all, editable by SuperAdmin only */}
-									{(userRole === 'superadmin' || userRole === 'sales') && (
-										<div className='relative'>
-											<label className='block text-sm font-medium mb-2'>Student Status</label>
-											<button
-												type='button'
-												onClick={() =>
-													setShowDropdowns((prev) => ({ ...prev, studentStatus: !prev.studentStatus }))
-												}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'
-												disabled={userRole !== 'superadmin'}>
-												<span className={formData.studentStatus ? 'text-foreground' : 'text-muted-foreground'}>
-													{formData.studentStatus
-														? STUDENT_STATUS.find((status) => status.value === formData.studentStatus)
-																?.label || 'Select Status'
-														: 'Select Status'}
-												</span>
-												{userRole === 'superadmin' && <ChevronDown className='h-4 w-4' />}
-											</button>
-
-											{showDropdowns.studentStatus && userRole === 'superadmin' && (
-												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-													{STUDENT_STATUS.map((status) => (
-														<button
-															key={status.value}
-															type='button'
-															onClick={() => handleDropdownSelect('studentStatus', status.value)}
-															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-															{status.label}
-														</button>
-													))}
-												</div>
-											)}
-										</div>
-									)}
-
-									{/* Validation Comment - Visible to all, editable by SuperAdmin only */}
-									{(userRole === 'superadmin' || userRole === 'sales') && (
-										<div>
-											<label className='block text-sm font-medium mb-2'>Comment</label>
-											<textarea
-												value={formData.validationComment || ''}
-												onChange={
-													userRole === 'superadmin'
-														? (e) => setFormData((prev) => ({ ...prev, validationComment: e.target.value }))
-														: undefined
-												}
-												placeholder={
-													userRole === 'superadmin' ? 'Add validation comments...' : 'No comments yet'
-												}
-												className={`w-full px-3 py-2 border border-gray-300 rounded-lg resize-none ${
-													userRole === 'superadmin'
-														? 'focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-														: 'bg-gray-50 cursor-not-allowed'
-												}`}
-												rows={3}
-												readOnly={userRole !== 'superadmin'}
-											/>
-											<p className='text-xs text-gray-500 mt-1'>
-												{userRole === 'superadmin'
-													? "Comments will be attached to this student's record"
-													: 'Only superadmin can modify comments'}
-											</p>
-										</div>
-									)}
-								</>
-							)}
-
-							{/* Test Scores Section - Only for test mode */}
-							{modalMode === 'test' && editingStudent && (
+								{/* Test Requirement Filter */}
 								<div>
-									<h4 className='font-medium mb-3'>
-										Add Test Results for {editingStudent.nom} {editingStudent.prenom}
-									</h4>
-									<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-										{editingStudent.specialite === 'LAC' &&
-											['maths', 'logique', 'francais', 'cultureGenerale'].map((field) => (
-												<div key={field}>
-													<label className='block text-sm font-medium mb-2'>
-														Note{' '}
-														{field === 'maths'
-															? 'Maths'
-															: field === 'logique'
-															? 'Logique'
-															: field === 'francais'
-															? 'Français'
-															: field === 'cultureGenerale'
-															? 'Culture Générale'
-															: field}
-													</label>
-													<input
-														type='number'
-														step='0.01'
-														min='0'
-														max='20'
-														value={formData.testScores?.[field as keyof typeof formData.testScores] || ''}
-														onChange={(e) =>
-															setFormData((prev) => ({
-																...prev,
-																testScores: {
-																	...prev.testScores,
-																	[field]: parseFloat(e.target.value),
-																},
-															}))
-														}
-														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-													/>
-												</div>
-											))}
-										{editingStudent.specialite === 'LINFO' &&
-											['maths', 'logique'].map((field) => (
-												<div key={field}>
-													<label className='block text-sm font-medium mb-2'>
-														Note {field === 'maths' ? 'Maths' : 'Logique'}
-													</label>
-													<input
-														type='number'
-														step='0.01'
-														min='0'
-														max='20'
-														value={formData.testScores?.[field as keyof typeof formData.testScores] || ''}
-														onChange={(e) =>
-															setFormData((prev) => ({
-																...prev,
-																testScores: {
-																	...prev.testScores,
-																	[field]: parseFloat(e.target.value),
-																},
-															}))
-														}
-														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-													/>
-												</div>
-											))}
+									<label className='block text-sm font-medium mb-2'>Test Requirement</label>
+									<div className='relative'>
+										<button
+											type='button'
+											onClick={() =>
+												setShowDropdowns((prev) => ({ ...prev, testRequired: !prev.testRequired }))
+											}
+											className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+											<span className={filterTestRequired ? 'text-foreground' : 'text-muted-foreground'}>
+												{filterTestRequired === 'required'
+													? 'Test Required'
+													: filterTestRequired === 'not_required'
+													? 'No Test Required'
+													: 'All Students'}
+											</span>
+											<ChevronDown className='h-4 w-4' />
+										</button>
+
+										{showDropdowns.testRequired && (
+											<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
+												<button
+													type='button'
+													onClick={() => {
+														setFilterTestRequired('');
+														setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
+													}}
+													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+													All Students
+												</button>
+												<button
+													type='button'
+													onClick={() => {
+														setFilterTestRequired('required');
+														setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
+													}}
+													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+													Test Required
+												</button>
+												<button
+													type='button'
+													onClick={() => {
+														setFilterTestRequired('not_required');
+														setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
+													}}
+													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+													No Test Required
+												</button>
+											</div>
+										)}
 									</div>
 								</div>
-							)}
-
-							{/* Form Actions */}
-							<div className='flex gap-3 pt-4'>
-								<Button type='button' variant='outline' onClick={resetForm} className='flex-1'>
-									Cancel
-								</Button>
-								<Button type='submit' className='flex-1'>
-									<Save className='h-4 w-4 mr-2' />
-									{modalMode === 'add'
-										? 'Save Student'
-										: modalMode === 'edit'
-										? 'Update Student'
-										: 'Save Test Results'}
-								</Button>
 							</div>
-						</form>
-					</div>
-				</DialogContent>
-			</Dialog>
+						</CardContent>
+					</Card>
 
-			{/* Students Table */}
-			<Card>
-				<CardHeader>
-					<CardTitle>Students ({filteredStudents.length})</CardTitle>
-				</CardHeader>
-				<CardContent>
-					{filteredStudents.length === 0 ? (
-						<div className='text-center py-8 text-muted-foreground'>
-							No students found for the selected criteria.
-						</div>
-					) : (
-						<div className='overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100'>
-							<table className='w-full border-collapse min-w-max'>
-								<thead>
-									<tr className='border-b'>
-										<th className='text-left p-3 min-w-[150px]'>Name</th>
-										<th className='text-left p-3 min-w-[120px]'>Mobile</th>
-										<th className='text-left p-3 min-w-[100px]'>Bac</th>
-										<th className='text-left p-3 min-w-[100px]'>Specialité</th>
-										<th className='text-left p-3 min-w-[120px]'>Scores</th>
-										<th className='text-left p-3 min-w-[80px]'>Test</th>
-										<th className='text-left p-3 min-w-[120px]'>Test Results</th>
-										<th className='text-left p-3 min-w-[100px]'>Status</th>
-										<th className='text-left p-3 min-w-[120px]'>Student Status</th>
-										{(userRole === 'superadmin' || userRole === 'sales') && (
-											<th className='text-left p-3 min-w-[150px]'>Comment</th>
-										)}
-										<th className='text-left p-3 min-w-[120px]'>Interview Date</th>
-										<th className='text-left p-3 min-w-[100px]'>Created</th>
-										<th className='text-left p-3 min-w-[120px]'>Sales Person</th>
-										<th className='text-left p-3 min-w-[100px]'>Actions</th>
-									</tr>
-								</thead>
-								<tbody>
-									{filteredStudents.map((student, index) => (
-										<tr key={index} className='border-b hover:bg-gray-50'>
-											<td className='p-3'>
+					{/* Student Form Modal */}
+					<Dialog
+						open={showForm}
+						onOpenChange={(open) => {
+							if (!open) resetForm();
+							setShowForm(open);
+						}}>
+						<DialogContent className='max-w-2xl max-h-[95vh] overflow-y-auto'>
+							<DialogHeader>
+								<DialogTitle>
+									{modalMode === 'add'
+										? 'Add New Student'
+										: modalMode === 'edit'
+										? 'Edit Student'
+										: 'Add Test Results'}
+								</DialogTitle>
+							</DialogHeader>
+							<div className='space-y-4'>
+								<form onSubmit={handleSubmit} className='space-y-4'>
+									{modalMode !== 'test' && (
+										<>
+											{/* Basic Info */}
+											<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 												<div>
-													<div className='font-medium'>
-														{student.nom} {student.prenom}
+													<label className='block text-sm font-medium mb-2'>Nom *</label>
+													<input
+														type='text'
+														value={formData.nom}
+														onChange={(e) => setFormData((prev) => ({ ...prev, nom: e.target.value }))}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+														required
+													/>
+												</div>
+												<div>
+													<label className='block text-sm font-medium mb-2'>Prénom *</label>
+													<input
+														type='text'
+														value={formData.prenom}
+														onChange={(e) => setFormData((prev) => ({ ...prev, prenom: e.target.value }))}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+														required
+													/>
+												</div>
+											</div>
+
+											<div>
+												<label className='block text-sm font-medium mb-2'>Mobile *</label>
+												<input
+													type='tel'
+													value={formData.mobile}
+													onChange={(e) => setFormData((prev) => ({ ...prev, mobile: e.target.value }))}
+													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+													required
+												/>
+											</div>
+
+											<div>
+												<label className='block text-sm font-medium mb-2'>Interview Date</label>
+												<CalendarComponent
+													value={formData.interviewDate || ''}
+													onChange={(date) => setFormData((prev) => ({ ...prev, interviewDate: date }))}
+													className='w-full'
+												/>
+												<p className='text-xs text-gray-500 mt-1'>
+													Select a date to automatically add student to interview registry
+												</p>
+											</div>
+
+											{/* Dropdowns */}
+											<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+												{/* Bac Type */}
+												<div className='relative'>
+													<label className='block text-sm font-medium mb-2'>Type Bac *</label>
+													<button
+														type='button'
+														onClick={() => setShowDropdowns((prev) => ({ ...prev, bacType: !prev.bacType }))}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+														<span className={formData.bacType ? 'text-foreground' : 'text-muted-foreground'}>
+															{formData.bacType
+																? BAC_TYPES.find((b) => b.value === formData.bacType)?.label
+																: 'Select Bac Type'}
+														</span>
+														<ChevronDown className='h-4 w-4' />
+													</button>
+
+													{showDropdowns.bacType && (
+														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+															{BAC_TYPES.map((bac) => (
+																<button
+																	key={bac.value}
+																	type='button'
+																	onClick={() => handleDropdownSelect('bacType', bac.value)}
+																	className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+																	{bac.label}
+																</button>
+															))}
+														</div>
+													)}
+												</div>
+
+												{/* Année Bac */}
+												<div className='relative'>
+													<label className='block text-sm font-medium mb-2'>Année Bac *</label>
+													<button
+														type='button'
+														onClick={() =>
+															setShowDropdowns((prev) => ({ ...prev, anneeBac: !prev.anneeBac }))
+														}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+														<span className={formData.anneeBac ? 'text-foreground' : 'text-muted-foreground'}>
+															{formData.anneeBac || 'Select Year'}
+														</span>
+														<ChevronDown className='h-4 w-4' />
+													</button>
+
+													{showDropdowns.anneeBac && (
+														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+															{ANNEE_BAC.map((annee) => (
+																<button
+																	key={annee.value}
+																	type='button'
+																	onClick={() => handleDropdownSelect('anneeBac', annee.value)}
+																	className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+																	{annee.label}
+																</button>
+															))}
+														</div>
+													)}
+												</div>
+
+												{/* Specialité */}
+												<div className='relative'>
+													<label className='block text-sm font-medium mb-2'>Spécialité *</label>
+													<button
+														type='button'
+														onClick={() =>
+															setShowDropdowns((prev) => ({ ...prev, specialite: !prev.specialite }))
+														}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+														<span
+															className={formData.specialite ? 'text-foreground' : 'text-muted-foreground'}>
+															{formData.specialite
+																? SPECIALITES.find((s) => s.value === formData.specialite)?.label
+																: 'Select Specialité'}
+														</span>
+														<ChevronDown className='h-4 w-4' />
+													</button>
+
+													{showDropdowns.specialite && (
+														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+															{SPECIALITES.map((spec) => (
+																<button
+																	key={spec.value}
+																	type='button'
+																	onClick={() => handleDropdownSelect('specialite', spec.value)}
+																	className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+																	{spec.label}
+																</button>
+															))}
+														</div>
+													)}
+												</div>
+											</div>
+
+											{/* Academic Scores - For LAC, LFC, and LINFO */}
+											{(formData.specialite === 'LAC' ||
+												formData.specialite === 'LFC' ||
+												formData.specialite === 'LINFO') && (
+												<div>
+													<h4 className='font-medium mb-3'>Academic Scores</h4>
+													<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+														{getSpecializedFields().map((field) => (
+															<div key={field}>
+																<label className='block text-sm font-medium mb-2'>
+																	{field === 'moyenneGenerale'
+																		? 'Moyenne Générale'
+																		: field === 'maths'
+																		? 'Maths'
+																		: field === 'francais'
+																		? 'Français'
+																		: field === 'physique'
+																		? 'Physique'
+																		: field}{' '}
+																	*
+																</label>
+																<input
+																	type='number'
+																	step='0.01'
+																	min='0'
+																	max='20'
+																	value={(formData[field as keyof Student] as number) || ''}
+																	onChange={(e) =>
+																		setFormData((prev) => ({
+																			...prev,
+																			[field]: parseFloat(e.target.value),
+																		}))
+																	}
+																	className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+																	required
+																/>
+															</div>
+														))}
 													</div>
 												</div>
-											</td>
-											<td className='p-3'>{student.mobile}</td>
-											<td className='p-3'>
-												<div className='text-sm'>
-													<div>{BAC_TYPES.find((b) => b.value === student.bacType)?.label}</div>
-													<div className='text-muted-foreground'>{student.anneeBac}</div>
+											)}
+
+											{/* Master Program Fields - Only for MASTER MM and MASTER TD */}
+											{(formData.specialite === 'MASTER_MM' || formData.specialite === 'MASTER_TD') && (
+												<div>
+													<h4 className='font-medium mb-3'>Licence Information</h4>
+													<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+														{getMasterFields().map((field) => (
+															<div key={field}>
+																<label className='block text-sm font-medium mb-2'>
+																	{field === 'licenceSpecialite'
+																		? 'Licence Spécialité'
+																		: field === 'university'
+																		? 'University'
+																		: field}{' '}
+																	*
+																</label>
+																<input
+																	type='text'
+																	value={(formData[field as keyof Student] as string) || ''}
+																	onChange={(e) =>
+																		setFormData((prev) => ({
+																			...prev,
+																			[field]: e.target.value,
+																		}))
+																	}
+																	className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+																	required
+																	placeholder={
+																		field === 'licenceSpecialite'
+																			? 'e.g., Informatique, Mathématiques'
+																			: 'e.g., Université de Tunis'
+																	}
+																/>
+															</div>
+														))}
+													</div>
 												</div>
-											</td>
-											<td className='p-3'>
-												<Badge>{student.specialite}</Badge>
-											</td>
-											<td className='p-3'>
-												<div className='text-sm'>
-													{student.specialite === 'LAC' && (
-														<>
-															{student.moyenneGenerale && <div>Moy: {student.moyenneGenerale}</div>}
-															{student.maths && <div>Math: {student.maths}</div>}
-															{student.francais && <div>Fr: {student.francais}</div>}
-														</>
-													)}
-													{(student.specialite === 'MASTER_MM' || student.specialite === 'MASTER_TD') && (
-														<>
-															{student.licenceSpecialite && <div>Spec: {student.licenceSpecialite}</div>}
-															{student.university && <div>Univ: {student.university}</div>}
-														</>
-													)}
-													{student.specialite === 'LINFO' && (
-														<>
-															{student.moyenneGenerale && <div>Moy: {student.moyenneGenerale}</div>}
-															{student.maths && <div>Math: {student.maths}</div>}
-															{student.physique && <div>Phy: {student.physique}</div>}
-														</>
-													)}
-													{student.specialite === 'LFC' && (
-														<>
-															{student.moyenneGenerale && <div>Moy: {student.moyenneGenerale}</div>}
-															{student.maths && <div>Math: {student.maths}</div>}
-															{student.francais && <div>Fr: {student.francais}</div>}
-														</>
+											)}
+
+											{/* Test Required Badge */}
+											{testRequired && (
+												<div className='flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg'>
+													<AlertTriangle className='h-5 w-5 text-yellow-600' />
+													<Badge variant='warning'>Test Required</Badge>
+													<span className='text-sm text-yellow-700'>
+														Average below 12 - entrance test required
+													</span>
+												</div>
+											)}
+
+											{/* Test Scores */}
+											{testRequired && (
+												<div>
+													<h4 className='font-medium mb-3'>Test Scores</h4>
+													<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+														{getTestFields().map((field) => (
+															<div key={field}>
+																<label className='block text-sm font-medium mb-2'>
+																	Note{' '}
+																	{field === 'maths'
+																		? 'Maths'
+																		: field === 'logique'
+																		? 'Logique'
+																		: field === 'francais'
+																		? 'Français'
+																		: field === 'cultureGenerale'
+																		? 'Culture Générale'
+																		: field}
+																</label>
+																<input
+																	type='number'
+																	step='0.01'
+																	min='0'
+																	max='20'
+																	value={
+																		formData.testScores?.[field as keyof typeof formData.testScores] || ''
+																	}
+																	onChange={(e) =>
+																		setFormData((prev) => ({
+																			...prev,
+																			testScores: {
+																				...prev.testScores,
+																				[field]: parseFloat(e.target.value),
+																			},
+																		}))
+																	}
+																	className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+																/>
+															</div>
+														))}
+													</div>
+												</div>
+											)}
+
+											{/* Validation - Only for SuperAdmin */}
+											{userRole === 'superadmin' && (
+												<div className='relative'>
+													<label className='block text-sm font-medium mb-2'>Validation</label>
+													<button
+														type='button'
+														onClick={() =>
+															setShowDropdowns((prev) => ({ ...prev, validation: !prev.validation }))
+														}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+														<span
+															className={formData.validation ? 'text-foreground' : 'text-muted-foreground'}>
+															{formData.validation
+																? VALIDATION_STATUS.find((status) => status.value === formData.validation)
+																		?.label || 'Select Status'
+																: 'Select Status'}
+														</span>
+														<ChevronDown className='h-4 w-4' />
+													</button>
+
+													{showDropdowns.validation && (
+														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+															{VALIDATION_STATUS.map((status) => (
+																<button
+																	key={status.value}
+																	type='button'
+																	onClick={() => handleDropdownSelect('validation', status.value)}
+																	className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+																	{status.label}
+																</button>
+															))}
+														</div>
 													)}
 												</div>
-											</td>
-											<td className='p-3'>
-												{student.testRequired ? (
-													<Badge variant='warning'>
-														<AlertTriangle className='h-3 w-3 mr-1' />
-														Required
-													</Badge>
-												) : (
-													<Badge>
-														<Check className='h-3 w-3 mr-1' />
-														Not Required
-													</Badge>
+											)}
+
+											{/* Student Status - Visible to all, editable by SuperAdmin only */}
+											{(userRole === 'superadmin' || userRole === 'sales') && (
+												<div className='relative'>
+													<label className='block text-sm font-medium mb-2'>Student Status</label>
+													<button
+														type='button'
+														onClick={() =>
+															setShowDropdowns((prev) => ({ ...prev, studentStatus: !prev.studentStatus }))
+														}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'
+														disabled={userRole !== 'superadmin'}>
+														<span
+															className={
+																formData.studentStatus ? 'text-foreground' : 'text-muted-foreground'
+															}>
+															{formData.studentStatus
+																? STUDENT_STATUS.find((status) => status.value === formData.studentStatus)
+																		?.label || 'Select Status'
+																: 'Select Status'}
+														</span>
+														{userRole === 'superadmin' && <ChevronDown className='h-4 w-4' />}
+													</button>
+
+													{showDropdowns.studentStatus && userRole === 'superadmin' && (
+														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+															{STUDENT_STATUS.map((status) => (
+																<button
+																	key={status.value}
+																	type='button'
+																	onClick={() => handleDropdownSelect('studentStatus', status.value)}
+																	className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+																	{status.label}
+																</button>
+															))}
+														</div>
+													)}
+												</div>
+											)}
+
+											{/* Validation Comment - Visible to all, editable by SuperAdmin only */}
+											{(userRole === 'superadmin' || userRole === 'sales') && (
+												<div>
+													<label className='block text-sm font-medium mb-2'>Comment</label>
+													<textarea
+														value={formData.validationComment || ''}
+														onChange={
+															userRole === 'superadmin'
+																? (e) =>
+																		setFormData((prev) => ({ ...prev, validationComment: e.target.value }))
+																: undefined
+														}
+														placeholder={
+															userRole === 'superadmin' ? 'Add validation comments...' : 'No comments yet'
+														}
+														className={`w-full px-3 py-2 border border-gray-300 rounded-lg resize-none ${
+															userRole === 'superadmin'
+																? 'focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+																: 'bg-gray-50 cursor-not-allowed'
+														}`}
+														rows={3}
+														readOnly={userRole !== 'superadmin'}
+													/>
+													<p className='text-xs text-gray-500 mt-1'>
+														{userRole === 'superadmin'
+															? "Comments will be attached to this student's record"
+															: 'Only superadmin can modify comments'}
+													</p>
+												</div>
+											)}
+										</>
+									)}
+
+									{/* Test Scores Section - Only for test mode */}
+									{modalMode === 'test' && editingStudent && (
+										<div>
+											<h4 className='font-medium mb-3'>
+												Add Test Results for {editingStudent.nom} {editingStudent.prenom}
+											</h4>
+											<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+												{editingStudent.specialite === 'LAC' &&
+													['maths', 'logique', 'francais', 'cultureGenerale'].map((field) => (
+														<div key={field}>
+															<label className='block text-sm font-medium mb-2'>
+																Note{' '}
+																{field === 'maths'
+																	? 'Maths'
+																	: field === 'logique'
+																	? 'Logique'
+																	: field === 'francais'
+																	? 'Français'
+																	: field === 'cultureGenerale'
+																	? 'Culture Générale'
+																	: field}
+															</label>
+															<input
+																type='number'
+																step='0.01'
+																min='0'
+																max='20'
+																value={formData.testScores?.[field as keyof typeof formData.testScores] || ''}
+																onChange={(e) =>
+																	setFormData((prev) => ({
+																		...prev,
+																		testScores: {
+																			...prev.testScores,
+																			[field]: parseFloat(e.target.value),
+																		},
+																	}))
+																}
+																className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+															/>
+														</div>
+													))}
+												{editingStudent.specialite === 'LINFO' &&
+													['maths', 'logique'].map((field) => (
+														<div key={field}>
+															<label className='block text-sm font-medium mb-2'>
+																Note {field === 'maths' ? 'Maths' : 'Logique'}
+															</label>
+															<input
+																type='number'
+																step='0.01'
+																min='0'
+																max='20'
+																value={formData.testScores?.[field as keyof typeof formData.testScores] || ''}
+																onChange={(e) =>
+																	setFormData((prev) => ({
+																		...prev,
+																		testScores: {
+																			...prev.testScores,
+																			[field]: parseFloat(e.target.value),
+																		},
+																	}))
+																}
+																className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+															/>
+														</div>
+													))}
+											</div>
+										</div>
+									)}
+
+									{/* Form Actions */}
+									<div className='flex gap-3 pt-4'>
+										<Button type='button' variant='outline' onClick={resetForm} className='flex-1'>
+											Cancel
+										</Button>
+										<Button type='submit' className='flex-1'>
+											<Save className='h-4 w-4 mr-2' />
+											{modalMode === 'add'
+												? 'Save Student'
+												: modalMode === 'edit'
+												? 'Update Student'
+												: 'Save Test Results'}
+										</Button>
+									</div>
+								</form>
+							</div>
+						</DialogContent>
+					</Dialog>
+
+					{/* Students Table */}
+					<Card>
+						<CardHeader>
+							<CardTitle>Students ({filteredStudents.length})</CardTitle>
+						</CardHeader>
+						<CardContent>
+							{filteredStudents.length === 0 ? (
+								<div className='text-center py-8 text-muted-foreground'>
+									No students found for the selected criteria.
+								</div>
+							) : (
+								<div className='overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100'>
+									<table className='w-full border-collapse min-w-max'>
+										<thead>
+											<tr className='border-b'>
+												<th className='text-left p-3 min-w-[150px]'>Name</th>
+												<th className='text-left p-3 min-w-[120px]'>Mobile</th>
+												<th className='text-left p-3 min-w-[100px]'>Bac</th>
+												<th className='text-left p-3 min-w-[100px]'>Specialité</th>
+												<th className='text-left p-3 min-w-[120px]'>Scores</th>
+												<th className='text-left p-3 min-w-[80px]'>Test</th>
+												<th className='text-left p-3 min-w-[120px]'>Test Results</th>
+												<th className='text-left p-3 min-w-[100px]'>Status</th>
+												<th className='text-left p-3 min-w-[120px]'>Student Status</th>
+												{(userRole === 'superadmin' || userRole === 'sales') && (
+													<th className='text-left p-3 min-w-[150px]'>Comment</th>
 												)}
-											</td>
-											<td className='p-3'>
-												<div className='text-sm'>
-													{student.testScores && Object.keys(student.testScores).length > 0 ? (
-														<div className='space-y-1'>
-															{Object.entries(student.testScores).map(
-																([key, value]) =>
-																	value !== undefined &&
-																	value !== null && (
-																		<div key={key} className='flex justify-between'>
-																			<span className='text-gray-600 capitalize'>
-																				{key === 'maths'
-																					? 'Math'
-																					: key === 'logique'
-																					? 'Logic'
-																					: key === 'francais'
-																					? 'Fr'
-																					: key === 'cultureGenerale'
-																					? 'Culture'
-																					: key}
-																				:
-																			</span>
-																			<span className='font-medium'>{value}</span>
-																		</div>
-																	)
+												<th className='text-left p-3 min-w-[120px]'>Interview Date</th>
+												<th className='text-left p-3 min-w-[100px]'>Created</th>
+												<th className='text-left p-3 min-w-[120px]'>Sales Person</th>
+												<th className='text-left p-3 min-w-[100px]'>Actions</th>
+											</tr>
+										</thead>
+										<tbody>
+											{filteredStudents.map((student, index) => (
+												<tr key={index} className='border-b hover:bg-gray-50'>
+													<td className='p-3'>
+														<div>
+															<div className='font-medium'>
+																{student.nom} {student.prenom}
+															</div>
+														</div>
+													</td>
+													<td className='p-3'>{student.mobile}</td>
+													<td className='p-3'>
+														<div className='text-sm'>
+															<div>{BAC_TYPES.find((b) => b.value === student.bacType)?.label}</div>
+															<div className='text-muted-foreground'>{student.anneeBac}</div>
+														</div>
+													</td>
+													<td className='p-3'>
+														<Badge>{student.specialite}</Badge>
+													</td>
+													<td className='p-3'>
+														<div className='text-sm'>
+															{student.specialite === 'LAC' && (
+																<>
+																	{student.moyenneGenerale && <div>Moy: {student.moyenneGenerale}</div>}
+																	{student.maths && <div>Math: {student.maths}</div>}
+																	{student.francais && <div>Fr: {student.francais}</div>}
+																</>
+															)}
+															{(student.specialite === 'MASTER_MM' || student.specialite === 'MASTER_TD') && (
+																<>
+																	{student.licenceSpecialite && <div>Spec: {student.licenceSpecialite}</div>}
+																	{student.university && <div>Univ: {student.university}</div>}
+																</>
+															)}
+															{student.specialite === 'LINFO' && (
+																<>
+																	{student.moyenneGenerale && <div>Moy: {student.moyenneGenerale}</div>}
+																	{student.maths && <div>Math: {student.maths}</div>}
+																	{student.physique && <div>Phy: {student.physique}</div>}
+																</>
+															)}
+															{student.specialite === 'LFC' && (
+																<>
+																	{student.moyenneGenerale && <div>Moy: {student.moyenneGenerale}</div>}
+																	{student.maths && <div>Math: {student.maths}</div>}
+																	{student.francais && <div>Fr: {student.francais}</div>}
+																</>
 															)}
 														</div>
-													) : (
-														<span className='text-gray-400'>No results</span>
-													)}
-												</div>
-											</td>
-											<td className='p-3'>
-												<Badge variant={getValidationVariant(student.validation)}>
-													{getValidationLabel(student.validation)}
-												</Badge>
-											</td>
-											<td className='p-3'>
-												<Badge variant={getStudentStatusVariant(student.studentStatus)}>
-													{getStudentStatusLabel(student.studentStatus)}
-												</Badge>
-											</td>
-											{(userRole === 'superadmin' || userRole === 'sales') && (
-												<td className='p-3 text-sm text-muted-foreground max-w-48'>
-													{student.validationComment ? (
-														<div className='truncate' title={student.validationComment}>
-															{student.validationComment}
-														</div>
-													) : (
-														<span className='text-gray-400 italic'>No comment</span>
-													)}
-												</td>
-											)}
-											<td className='p-3 text-sm text-muted-foreground'>
-												{student.interviewDate ? (
-													<div className='flex items-center gap-1'>
-														<Calendar className='h-3 w-3' />
-														{new Date(student.interviewDate).toLocaleDateString()}
-													</div>
-												) : (
-													<span className='text-gray-400'>Not scheduled</span>
-												)}
-											</td>
-											<td className='p-3 text-sm text-muted-foreground'>
-												{student.dateCreated.toLocaleDateString()}
-											</td>
-											<td className='p-3 text-sm text-muted-foreground'>
-												{getSalesPersonName(student.salesPersonId)}
-											</td>
-											<td className='p-3'>
-												<div className='flex gap-2'>
-													{/* Edit Button */}
-													{(userRole === 'sales' && student.salesPersonId === salesPersonId) ||
-													userRole === 'superadmin' ? (
-														<Button
-															onClick={() => handleEdit(student)}
-															size='sm'
-															variant='outline'
-															className='p-2'>
-															<Edit2 className='h-3 w-3' />
-														</Button>
-													) : null}
-
-													{/* Test Results Button - Only show if test required and no results yet */}
-													{student.testRequired &&
-														(!student.testScores || Object.keys(student.testScores).length === 0) && (
-															<Button
-																onClick={() => handleAddTestResults(student)}
-																size='sm'
-																variant='outline'
-																className='p-2 bg-yellow-50 hover:bg-yellow-100'>
-																<FileText className='h-3 w-3' />
-															</Button>
+													</td>
+													<td className='p-3'>
+														{student.testRequired ? (
+															<Badge variant='warning'>
+																<AlertTriangle className='h-3 w-3 mr-1' />
+																Required
+															</Badge>
+														) : (
+															<Badge>
+																<Check className='h-3 w-3 mr-1' />
+																Not Required
+															</Badge>
 														)}
+													</td>
+													<td className='p-3'>
+														<div className='text-sm'>
+															{student.testScores && Object.keys(student.testScores).length > 0 ? (
+																<div className='space-y-1'>
+																	{Object.entries(student.testScores).map(
+																		([key, value]) =>
+																			value !== undefined &&
+																			value !== null && (
+																				<div key={key} className='flex justify-between'>
+																					<span className='text-gray-600 capitalize'>
+																						{key === 'maths'
+																							? 'Math'
+																							: key === 'logique'
+																							? 'Logic'
+																							: key === 'francais'
+																							? 'Fr'
+																							: key === 'cultureGenerale'
+																							? 'Culture'
+																							: key}
+																						:
+																					</span>
+																					<span className='font-medium'>{value}</span>
+																				</div>
+																			)
+																	)}
+																</div>
+															) : (
+																<span className='text-gray-400'>No results</span>
+															)}
+														</div>
+													</td>
+													<td className='p-3'>
+														<Badge variant={getValidationVariant(student.validation)}>
+															{getValidationLabel(student.validation)}
+														</Badge>
+													</td>
+													<td className='p-3'>
+														<Badge variant={getStudentStatusVariant(student.studentStatus)}>
+															{getStudentStatusLabel(student.studentStatus)}
+														</Badge>
+													</td>
+													{(userRole === 'superadmin' || userRole === 'sales') && (
+														<td className='p-3 text-sm text-muted-foreground max-w-48'>
+															{student.validationComment ? (
+																<div className='truncate' title={student.validationComment}>
+																	{student.validationComment}
+																</div>
+															) : (
+																<span className='text-gray-400 italic'>No comment</span>
+															)}
+														</td>
+													)}
+													<td className='p-3 text-sm text-muted-foreground'>
+														{student.interviewDate ? (
+															<div className='flex items-center gap-1'>
+																<Calendar className='h-3 w-3' />
+																{new Date(student.interviewDate).toLocaleDateString()}
+															</div>
+														) : (
+															<span className='text-gray-400'>Not scheduled</span>
+														)}
+													</td>
+													<td className='p-3 text-sm text-muted-foreground'>
+														{student.dateCreated.toLocaleDateString()}
+													</td>
+													<td className='p-3 text-sm text-muted-foreground'>
+														{getSalesPersonName(student.salesPersonId)}
+													</td>
+													<td className='p-3'>
+														<div className='flex gap-2'>
+															{/* Edit Button */}
+															{(userRole === 'sales' && student.salesPersonId === salesPersonId) ||
+															userRole === 'superadmin' ? (
+																<Button
+																	onClick={() => handleEdit(student)}
+																	size='sm'
+																	variant='outline'
+																	className='p-2'>
+																	<Edit2 className='h-3 w-3' />
+																</Button>
+															) : null}
 
-													{/* Delete Button - Only for SuperAdmin */}
-													{userRole === 'superadmin' ? (
-														<Button
-															onClick={() => handleDeleteClick(student)}
-															size='sm'
-															variant='outline'
-															className='p-2 text-red-600 hover:text-red-700 hover:bg-red-50'>
-															<Trash2 className='h-3 w-3' />
-														</Button>
-													) : null}
-												</div>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
-					)}
-				</CardContent>
-			</Card>
+															{/* Test Results Button - Only show if test required and no results yet */}
+															{student.testRequired &&
+																(!student.testScores || Object.keys(student.testScores).length === 0) && (
+																	<Button
+																		onClick={() => handleAddTestResults(student)}
+																		size='sm'
+																		variant='outline'
+																		className='p-2 bg-yellow-50 hover:bg-yellow-100'>
+																		<FileText className='h-3 w-3' />
+																	</Button>
+																)}
 
+															{/* Interview Feedback Button - Only for SuperAdmin */}
+															{userRole === 'superadmin' && (
+																<Button
+																	onClick={() => handleViewEvaluation(student)}
+																	size='sm'
+																	variant='outline'
+																	disabled={loadingEvaluation}
+																	className='p-2 bg-blue-50 hover:bg-blue-100'
+																	title='Voir evaluation entretien'>
+																	<Eye className='h-3 w-3' />
+																</Button>
+															)}
+
+															{/* Delete Button - Only for SuperAdmin */}
+															{userRole === 'superadmin' ? (
+																<Button
+																	onClick={() => handleDeleteClick(student)}
+																	size='sm'
+																	variant='outline'
+																	className='p-2 text-red-600 hover:text-red-700 hover:bg-red-50'>
+																	<Trash2 className='h-3 w-3' />
+																</Button>
+															) : null}
+														</div>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							)}
+						</CardContent>
+					</Card>
 				</>
 			)}
 
@@ -1415,9 +1524,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 						</DialogTitle>
 					</DialogHeader>
 					<div className='py-4'>
-						<p className='text-gray-700 mb-4'>
-							Are you sure you want to delete this student?
-						</p>
+						<p className='text-gray-700 mb-4'>Are you sure you want to delete this student?</p>
 						{studentToDelete && (
 							<div className='bg-gray-50 p-3 rounded-lg'>
 								<p className='font-medium'>
@@ -1428,15 +1535,10 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 								</p>
 							</div>
 						)}
-						<p className='text-sm text-red-600 mt-3'>
-							This action cannot be undone.
-						</p>
+						<p className='text-sm text-red-600 mt-3'>This action cannot be undone.</p>
 					</div>
 					<div className='flex gap-3 justify-end'>
-						<Button
-							type='button'
-							variant='outline'
-							onClick={handleCancelDelete}>
+						<Button type='button' variant='outline' onClick={handleCancelDelete}>
 							Cancel
 						</Button>
 						<Button
@@ -1448,6 +1550,138 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 							Delete Student
 						</Button>
 					</div>
+				</DialogContent>
+			</Dialog>
+
+			{/* Interview Evaluation Modal */}
+			<Dialog open={showEvaluationModal} onOpenChange={setShowEvaluationModal}>
+				<DialogContent className='max-w-6xl max-h-[90vh] overflow-y-auto'>
+					<DialogHeader>
+						<DialogTitle className='flex items-center gap-2 text-blue-600'>
+							<Eye className='h-5 w-5' />
+							Évaluation d'Entretien
+						</DialogTitle>
+					</DialogHeader>
+					
+					{selectedEvaluation && (
+						<div className='space-y-6 p-6'>
+							{/* Student and Evaluation Info */}
+							<div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+								<Card>
+									<CardHeader>
+										<CardTitle className='text-lg'>Informations Évaluation</CardTitle>
+									</CardHeader>
+									<CardContent>
+										<div className='space-y-2'>
+											<p><strong>Évaluateur:</strong> {selectedEvaluation.membre_jury}</p>
+											<p><strong>Date:</strong> {new Date(selectedEvaluation.date_evaluation).toLocaleDateString('fr-FR')}</p>
+											<p><strong>Décision:</strong> 
+												<Badge className={`ml-2 ${
+													selectedEvaluation.decision_jury === 'admis' ? 'bg-green-100 text-green-800' :
+													selectedEvaluation.decision_jury === 'non_admis' ? 'bg-red-100 text-red-800' :
+													'bg-yellow-100 text-yellow-800'
+												}`}>
+													{selectedEvaluation.decision_jury === 'admis' ? 'Admis' :
+													 selectedEvaluation.decision_jury === 'non_admis' ? 'Non Admis' : 'Indécis'}
+												</Badge>
+											</p>
+										</div>
+									</CardContent>
+								</Card>
+
+								<Card>
+									<CardHeader>
+										<CardTitle className='text-lg'>Scores d'Évaluation</CardTitle>
+									</CardHeader>
+									<CardContent>
+										<div className='space-y-2'>
+											{[
+												{ label: 'Motivation Domaine', score: selectedEvaluation.motivation_domaine },
+												{ label: 'Motivation IFAG', score: selectedEvaluation.motivation_ifag },
+												{ label: 'Projet Études', score: selectedEvaluation.projet_etudes },
+												{ label: 'Projet Professionnel', score: selectedEvaluation.projet_professionnel },
+												{ label: 'Aisance Verbale', score: selectedEvaluation.aisance_verbale },
+												{ label: 'Interaction Jury', score: selectedEvaluation.interaction_jury },
+												{ label: 'Culture Générale', score: selectedEvaluation.culture_generale }
+											].map(item => (
+												<div key={item.label} className='flex items-center justify-between'>
+													<span className='text-sm'>{item.label}:</span>
+													<div className='flex items-center gap-1'>
+														{[1, 2, 3, 4, 5].map(star => (
+															<Star
+																key={star}
+																className={`h-3 w-3 ${
+																	star <= item.score 
+																		? 'text-yellow-500 fill-current' 
+																		: 'text-gray-300'
+																}`}
+															/>
+														))}
+														<span className='ml-1 text-sm font-medium'>{item.score}/5</span>
+													</div>
+												</div>
+											))}
+										</div>
+									</CardContent>
+								</Card>
+							</div>
+
+							{/* Situation des Études */}
+							<Card>
+								<CardHeader>
+									<CardTitle className='text-lg'>Situation des Études</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<p className='text-sm bg-gray-50 p-3 rounded'>{selectedEvaluation.situation_etudes}</p>
+								</CardContent>
+							</Card>
+
+							{/* Detailed Comments */}
+							<Card>
+								<CardHeader>
+									<CardTitle className='text-lg'>Commentaires Détaillés</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<div className='space-y-4'>
+										{[
+											{ label: 'Motivation Domaine', comment: selectedEvaluation.motivation_domaine_comment },
+											{ label: 'Motivation IFAG', comment: selectedEvaluation.motivation_ifag_comment },
+											{ label: 'Projet Études', comment: selectedEvaluation.projet_etudes_comment },
+											{ label: 'Projet Professionnel', comment: selectedEvaluation.projet_professionnel_comment },
+											{ label: 'Aisance Verbale', comment: selectedEvaluation.aisance_verbale_comment },
+											{ label: 'Interaction Jury', comment: selectedEvaluation.interaction_jury_comment },
+											{ label: 'Culture Générale', comment: selectedEvaluation.culture_generale_comment }
+										].map(item => item.comment && (
+											<div key={item.label}>
+												<h4 className='font-medium mb-2'>{item.label}:</h4>
+												<p className='text-sm bg-gray-50 p-3 rounded'>{item.comment}</p>
+											</div>
+										))}
+									</div>
+								</CardContent>
+							</Card>
+
+							{/* Global Comment */}
+							<Card>
+								<CardHeader>
+									<CardTitle className='text-lg'>Commentaire Global</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<p className='text-sm bg-blue-50 p-3 rounded border-l-4 border-blue-400'>
+										{selectedEvaluation.commentaire_global}
+									</p>
+								</CardContent>
+							</Card>
+
+							<div className='flex justify-end'>
+								<Button 
+									onClick={() => setShowEvaluationModal(false)}
+									variant='outline'>
+									Fermer
+								</Button>
+							</div>
+						</div>
+					)}
 				</DialogContent>
 			</Dialog>
 		</div>
