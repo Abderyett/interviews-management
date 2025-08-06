@@ -320,11 +320,11 @@ const InterviewQueueSystem = () => {
 	// Get students for selected date from admission students
 	const getRegisteredStudents = useCallback((): Student[] => {
 		return admissionStudents
-			.filter(student => {
+			.filter((student) => {
 				if (!student.interviewDate) return false;
 				return new Date(student.interviewDate).toDateString() === new Date(selectedDate).toDateString();
 			})
-			.map(student => ({
+			.map((student) => ({
 				studentId: `${student.nom?.toLowerCase()}.${student.prenom?.toLowerCase()}`,
 				name: `${student.nom} ${student.prenom}`,
 			}));
@@ -554,14 +554,12 @@ const InterviewQueueSystem = () => {
 		const initAndLoad = async () => {
 			if (!mounted) return;
 
-			// Check connection first
 			try {
 				setConnectionStatus('checking');
 				const { error } = await supabase.from('students').select('count').limit(1);
 				if (error) throw error;
 				setConnectionStatus('connected');
 
-				// If connected, proceed with data loading
 				if (!mounted) return;
 				await initializeProfessorData();
 				if (!mounted) return;
@@ -577,8 +575,18 @@ const InterviewQueueSystem = () => {
 
 		initAndLoad();
 
+		// 🔹 Add realtime subscription for professor status changes
+		const channel = supabase
+			.channel('professor-status-changes')
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'professor_status' }, (payload) => {
+				console.log('Professor status changed:', payload);
+				loadDateData(); // refresh receptionist/professor views
+			})
+			.subscribe();
+
 		return () => {
 			mounted = false;
+			supabase.removeChannel(channel); // clean up subscription
 		};
 	}, [selectedDate, initializeProfessorData, loadDateData, loadAdmissionStudents]);
 
@@ -743,12 +751,11 @@ const InterviewQueueSystem = () => {
 
 				// Clear the evaluation completion status for this student
 				const currentStudentAdmission = admissionStudents.find(
-					s => s.nom && s.prenom && 
-					`${s.nom} ${s.prenom}` === professor.currentStudent?.name
+					(s) => s.nom && s.prenom && `${s.nom} ${s.prenom}` === professor.currentStudent?.name
 				);
 				if (currentStudentAdmission?.id) {
 					const evaluationKey = `${currentStudentAdmission.id}-${professorId}`;
-					setCompletedEvaluations(prev => {
+					setCompletedEvaluations((prev) => {
 						const newSet = new Set(prev);
 						newSet.delete(evaluationKey);
 						return newSet;
@@ -1710,7 +1717,7 @@ const InterviewQueueSystem = () => {
 	const handleSaveInterviewEvaluation = useCallback(async (evaluation: InterviewEvaluation) => {
 		try {
 			setError(null);
-			
+
 			// Save evaluation to Supabase
 			const { error } = await supabase.from('interview_evaluations').insert({
 				student_id: evaluation.studentId,
@@ -1734,24 +1741,23 @@ const InterviewQueueSystem = () => {
 				commentaire_global: evaluation.commentaireGlobal,
 				membre_jury: evaluation.membreJury,
 				date_evaluation: evaluation.dateEvaluation.toISOString(),
-				created_at: new Date().toISOString()
+				created_at: new Date().toISOString(),
 			});
 
 			if (error) throw error;
 
 			console.log('Interview evaluation saved successfully');
-			
+
 			// Mark this student's evaluation as completed
 			const evaluationKey = `${evaluation.studentId}-${evaluation.professorId}`;
-			setCompletedEvaluations(prev => new Set(prev).add(evaluationKey));
-			
+			setCompletedEvaluations((prev) => new Set(prev).add(evaluationKey));
+
 			// Close the form
 			setShowInterviewForm(false);
 			setCurrentInterviewStudent(null);
-			
+
 			// Show success message
-			alert('Évaluation sauvegardée avec succès! Vous pouvez maintenant terminer l\'entretien.');
-			
+			alert("Évaluation sauvegardée avec succès! Vous pouvez maintenant terminer l'entretien.");
 		} catch (error) {
 			console.error('Error saving interview evaluation:', error);
 			setError(`Failed to save evaluation: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1889,7 +1895,9 @@ const InterviewQueueSystem = () => {
 								readOnly={isReadOnly}
 								userRole={userRole!}
 							/>
-							{userRole === 'superadmin' && <StudentForm onAddStudent={handleAddStudent} disabled={isLoading} />}
+							{userRole === 'superadmin' && (
+								<StudentForm onAddStudent={handleAddStudent} disabled={isLoading} />
+							)}
 						</div>
 					</div>
 					{/* Queue Management */}
@@ -2099,11 +2107,15 @@ const InterviewQueueSystem = () => {
 													{(() => {
 														// Check if evaluation has been completed for this student
 														const currentStudentAdmission = admissionStudents.find(
-															s => s.nom && s.prenom && 
-															`${s.nom} ${s.prenom}` === professor.currentStudent?.name
+															(s) =>
+																s.nom && s.prenom && `${s.nom} ${s.prenom}` === professor.currentStudent?.name
 														);
-														const evaluationKey = currentStudentAdmission?.id ? `${currentStudentAdmission.id}-${professorId}` : null;
-														const hasCompletedEvaluation = evaluationKey ? completedEvaluations.has(evaluationKey) : false;
+														const evaluationKey = currentStudentAdmission?.id
+															? `${currentStudentAdmission.id}-${professorId}`
+															: null;
+														const hasCompletedEvaluation = evaluationKey
+															? completedEvaluations.has(evaluationKey)
+															: false;
 
 														if (!hasCompletedEvaluation) {
 															// Show evaluation button if evaluation not completed
@@ -2111,8 +2123,11 @@ const InterviewQueueSystem = () => {
 																<Button
 																	onClick={async () => {
 																		console.log('Looking for student:', professor.currentStudent?.name);
-																		console.log('Available admission students:', admissionStudents.map(s => `${s.nom} ${s.prenom}`));
-																		
+																		console.log(
+																			'Available admission students:',
+																			admissionStudents.map((s) => `${s.nom} ${s.prenom}`)
+																		);
+
 																		// If no admission students loaded, try to reload them
 																		if (admissionStudents.length === 0) {
 																			console.log('No admission students loaded, reloading...');
@@ -2124,39 +2139,50 @@ const InterviewQueueSystem = () => {
 																				return;
 																			}
 																		}
-																		
+
 																		// Find the admission student that matches the current student
 																		// Try multiple matching strategies
 																		let admissionStudent = admissionStudents.find(
-																			s => s.nom && s.prenom && 
-																			`${s.nom} ${s.prenom}` === professor.currentStudent?.name
+																			(s) =>
+																				s.nom &&
+																				s.prenom &&
+																				`${s.nom} ${s.prenom}` === professor.currentStudent?.name
 																		);
-																		
+
 																		// If exact match fails, try case-insensitive match
 																		if (!admissionStudent) {
 																			admissionStudent = admissionStudents.find(
-																				s => s.nom && s.prenom && 
-																				`${s.nom} ${s.prenom}`.toLowerCase() === professor.currentStudent?.name?.toLowerCase()
+																				(s) =>
+																					s.nom &&
+																					s.prenom &&
+																					`${s.nom} ${s.prenom}`.toLowerCase() ===
+																						professor.currentStudent?.name?.toLowerCase()
 																			);
 																		}
-																		
+
 																		// If still no match, try matching by studentId (last resort)
 																		if (!admissionStudent && professor.currentStudent?.studentId) {
 																			admissionStudent = admissionStudents.find(
-																				s => s.nom && s.prenom && 
-																				`${s.nom?.toLowerCase()}.${s.prenom?.toLowerCase()}` === professor.currentStudent?.studentId
+																				(s) =>
+																					s.nom &&
+																					s.prenom &&
+																					`${s.nom?.toLowerCase()}.${s.prenom?.toLowerCase()}` ===
+																						professor.currentStudent?.studentId
 																			);
 																		}
-																		
+
 																		// If still no match, try partial name matching
 																		if (!admissionStudent && professor.currentStudent?.name) {
 																			const currentName = professor.currentStudent.name.toLowerCase();
 																			admissionStudent = admissionStudents.find(
-																				s => s.nom && s.prenom && 
-																				(currentName.includes(s.nom.toLowerCase()) && currentName.includes(s.prenom.toLowerCase()))
+																				(s) =>
+																					s.nom &&
+																					s.prenom &&
+																					currentName.includes(s.nom.toLowerCase()) &&
+																					currentName.includes(s.prenom.toLowerCase())
 																			);
 																		}
-																		
+
 																		if (admissionStudent) {
 																			console.log('Found matching student:', admissionStudent);
 																			handleStartInterview(admissionStudent);
@@ -2164,7 +2190,15 @@ const InterviewQueueSystem = () => {
 																			console.error('No matching student found');
 																			console.log('Current student details:', professor.currentStudent);
 																			console.log('All admission students:', admissionStudents);
-																			alert(`Student data not found in admission system.\n\nLooking for: "${professor.currentStudent?.name}" or "${professor.currentStudent?.studentId}"\n\nAvailable students: ${admissionStudents.map(s => `${s.nom} ${s.prenom}`).join(', ')}`);
+																			alert(
+																				`Student data not found in admission system.\n\nLooking for: "${
+																					professor.currentStudent?.name
+																				}" or "${
+																					professor.currentStudent?.studentId
+																				}"\n\nAvailable students: ${admissionStudents
+																					.map((s) => `${s.nom} ${s.prenom}`)
+																					.join(', ')}`
+																			);
 																		}
 																	}}
 																	className='w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200'>
