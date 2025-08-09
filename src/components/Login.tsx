@@ -3,7 +3,7 @@ import { GraduationCap, User, LogIn } from 'lucide-react';
 
 interface LoginProps {
 	onLogin: (
-		role: 'receptionist' | 'professor' | 'superadmin' | 'sales',
+		role: 'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration',
 		professorId?: number,
 		salesId?: number
 	) => void;
@@ -61,7 +61,7 @@ const CardContent = ({ children, className = '' }: { children: React.ReactNode; 
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 	const [selectedRole, setSelectedRole] = useState<
-		'receptionist' | 'professor' | 'superadmin' | 'sales' | null
+		'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration' | null
 	>(null);
 	const [username, setUsername] = useState('');
 	const [password, setPassword] = useState('');
@@ -76,6 +76,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 		},
 		receptionist: {
 			username: 'asma',
+			password: 'admin123',
+		},
+		administration: {
+			username: 'administration',
 			password: 'admin123',
 		},
 		professors: [
@@ -128,6 +132,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 					onLogin('sales', undefined, salesperson.id);
 				} else {
 					throw new Error('Invalid sales credentials');
+				}
+			} else if (selectedRole === 'administration') {
+				if (username === users.administration.username && password === users.administration.password) {
+					onLogin('administration');
+				} else {
+					throw new Error('Invalid administration credentials');
 				}
 			}
 		} catch (err) {
@@ -201,6 +211,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 										<div className='text-sm text-gray-500'>Manage student admissions</div>
 									</div>
 								</Button>
+
+								<Button
+									onClick={() => setSelectedRole('administration')}
+									variant='outline'
+									className='w-full justify-start h-16 text-left'>
+									<User className='h-6 w-6 mr-4 text-blue-600' />
+									<div>
+										<div className='font-semibold text-blue-600'>Administration</div>
+										<div className='text-sm text-gray-500'>View all students and validation status</div>
+									</div>
+								</Button>
 							</div>
 						) : (
 							<form onSubmit={handleLogin} className='space-y-4'>
@@ -218,9 +239,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 											<>
 												<GraduationCap className='h-5 w-5' /> Professor Login
 											</>
-										) : (
+										) : selectedRole === 'sales' ? (
 											<>
 												<User className='h-5 w-5 text-green-600' /> Sales Login
+											</>
+										) : (
+											<>
+												<User className='h-5 w-5 text-blue-600' /> Administration Login
 											</>
 										)}
 									</div>

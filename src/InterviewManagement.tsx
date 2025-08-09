@@ -13,6 +13,7 @@ import {
 	ChevronRight,
 	RefreshCw,
 	GripVertical,
+	Bell,
 } from 'lucide-react';
 
 import {
@@ -32,10 +33,10 @@ import { supabase } from './lib/supabase';
 import { StudentForm } from './components/StudentForm';
 import { StudentList } from './components/StudentList';
 import { Login } from './components/Login';
-import { SimpleChatSystem } from './components/SimpleChatSystem';
 import { Calendar as CalendarComponent } from './components/Calendar';
 import { StudentAdmissionForm } from './components/StudentAdmissionForm';
 import { ProfessorInterviewForm } from './components/ProfessorInterviewForm';
+import { AdministrationView } from './components/AdministrationView';
 
 // Types
 interface Student {
@@ -238,9 +239,9 @@ const InterviewQueueSystem = () => {
 	const [isLoggedIn, setIsLoggedIn] = useState(() => {
 		return localStorage.getItem('isLoggedIn') === 'true';
 	});
-	const [userRole, setUserRole] = useState<'receptionist' | 'professor' | 'superadmin' | 'sales' | null>(
+	const [userRole, setUserRole] = useState<'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration' | null>(
 		() => {
-			return localStorage.getItem('userRole') as 'receptionist' | 'professor' | 'superadmin' | 'sales' | null;
+			return localStorage.getItem('userRole') as 'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration' | null;
 		}
 	);
 	const [professorId, setProfessorId] = useState<number | null>(() => {
@@ -346,6 +347,10 @@ const InterviewQueueSystem = () => {
 	const [currentInterviewStudent, setCurrentInterviewStudent] = useState<AdmissionStudent | null>(null);
 	const [completedEvaluations, setCompletedEvaluations] = useState<Set<string>>(new Set());
 
+	// Notification state
+	const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+	const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+
 	// Memoized available professors
 	const availableProfessors = useMemo(
 		() => currentData.professors.filter((p: Professor) => p.status === 'available'),
@@ -361,7 +366,7 @@ const InterviewQueueSystem = () => {
 			console.log('Loading data for date:', selectedDate);
 
 			// Load all data in parallel
-			const [studentsResult, queueResult, completedResult, professorResult] = await Promise.all([
+			const [studentsResult, queueResult, completedResult, professorResult, evaluationsResult] = await Promise.all([
 				supabase.from('students').select('*').eq('interview_date', selectedDate),
 				supabase.from('interview_queue').select('*').eq('interview_date', selectedDate).order('queue_number'),
 				supabase
@@ -370,6 +375,7 @@ const InterviewQueueSystem = () => {
 					.eq('interview_date', selectedDate)
 					.order('completed_time', { ascending: false }),
 				supabase.from('professor_status').select('*').eq('date', selectedDate),
+				supabase.from('interview_evaluations').select('student_id, professor_id').gte('created_at', `${selectedDate}T00:00:00`).lt('created_at', `${selectedDate}T23:59:59`),
 			]);
 
 			// Check for errors
@@ -377,12 +383,14 @@ const InterviewQueueSystem = () => {
 			if (queueResult.error) throw queueResult.error;
 			if (completedResult.error) throw completedResult.error;
 			if (professorResult.error) throw professorResult.error;
+			if (evaluationsResult.error) throw evaluationsResult.error;
 
 			console.log('Loaded data:', {
 				students: studentsResult.data,
 				queue: queueResult.data,
 				completed: completedResult.data,
 				professors: professorResult.data,
+				evaluations: evaluationsResult.data,
 			});
 
 			// Transform and update data
@@ -418,7 +426,7 @@ const InterviewQueueSystem = () => {
 						name: ps.name,
 						room: ps.room,
 						floor: ps.floor,
-						status: ps.status as 'available' | 'busy' | 'unavailable' | 'offline',
+						status: (ps.status === 'busy' ? 'busy' : 'available') as 'available' | 'busy' | 'unavailable' | 'offline',
 						currentStudent: ps.current_student_id
 							? {
 									studentId: ps.current_student_id,
@@ -437,6 +445,21 @@ const InterviewQueueSystem = () => {
 				...prev,
 				[selectedDate]: newDateData,
 			}));
+
+			// Load completed evaluations for the selected date - preserve existing local state
+			if (evaluationsResult.data && evaluationsResult.data.length > 0) {
+				const dbEvaluationKeys = new Set(
+					evaluationsResult.data.map(
+						(evaluation) => `${evaluation.student_id}-${evaluation.professor_id}`
+					)
+				);
+				setCompletedEvaluations((prev) => {
+					// Merge database evaluations with any locally added ones
+					const merged = new Set([...prev, ...dbEvaluationKeys]);
+					console.log('Merged completed evaluations - DB:', dbEvaluationKeys, 'Local+DB:', merged);
+					return merged;
+				});
+			}
 		} catch (error) {
 			console.error('Error loading data:', error);
 			setError(`Failed to load data: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -462,7 +485,7 @@ const InterviewQueueSystem = () => {
 						name: 'Prof. Mansouri',
 						room: 'Room 7',
 						floor: 'First Floor',
-						status: 'offline',
+						status: 'available',
 						date: selectedDate,
 					},
 					{
@@ -470,7 +493,7 @@ const InterviewQueueSystem = () => {
 						name: 'Prof. Bedaida',
 						room: 'Room 8',
 						floor: 'First Floor',
-						status: 'offline',
+						status: 'available',
 						date: selectedDate,
 					},
 					{
@@ -478,7 +501,7 @@ const InterviewQueueSystem = () => {
 						name: 'Prof. Touati',
 						room: 'Room 9',
 						floor: 'First Floor',
-						status: 'offline',
+						status: 'available',
 						date: selectedDate,
 					},
 				];
@@ -530,6 +553,8 @@ const InterviewQueueSystem = () => {
 				testRequired: student.test_required,
 				testScores: student.test_scores,
 				validation: student.validation,
+				validationComment: student.validation_comment,
+				studentStatus: student.student_status,
 				interviewDate: student.interview_date,
 				dateCreated: new Date(student.date_created),
 				salesPersonId: student.sales_person_id,
@@ -566,6 +591,20 @@ const InterviewQueueSystem = () => {
 				await loadDateData();
 				if (!mounted) return;
 				await loadAdmissionStudents();
+				if (!mounted) return;
+				// Initialize notifications for receptionist
+				if (userRole === 'receptionist') {
+					if ('Notification' in window) {
+						const permission = await Notification.requestPermission();
+						setNotificationPermission(permission);
+					}
+					try {
+						const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+						setAudioContext(audioCtx);
+					} catch (error) {
+						console.warn('Audio context initialization failed:', error);
+					}
+				}
 			} catch (error) {
 				setConnectionStatus('disconnected');
 				console.error('Connection or data loading failed:', error);
@@ -576,7 +615,7 @@ const InterviewQueueSystem = () => {
 		initAndLoad();
 
 		// 🔹 Add realtime subscription for professor status changes
-		const channel = supabase
+		const professorChannel = supabase
 			.channel('professor-status-changes')
 			.on('postgres_changes', { event: '*', schema: 'public', table: 'professor_status' }, (payload) => {
 				console.log('Professor status changed:', payload);
@@ -584,11 +623,117 @@ const InterviewQueueSystem = () => {
 			})
 			.subscribe();
 
+		// 🔹 Add realtime subscription for completed interviews (for notifications)
+		const completedChannel = supabase
+			.channel('completed-interviews')
+			.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'completed_interviews' }, async (payload) => {
+				console.log('Interview completed real-time event received:', payload);
+				console.log('Current user role:', userRole);
+				console.log('Payload has new data:', !!payload.new);
+				
+				// Only trigger notification for receptionist role
+				if (userRole === 'receptionist' && payload.new) {
+					const professorName = (payload.new as { professor_name?: string }).professor_name;
+					const studentName = (payload.new as { name?: string }).name;
+					
+					console.log('Extracted from payload - Professor:', professorName, 'Student:', studentName);
+					
+					if (professorName && studentName) {
+						console.log('Triggering notification for professor:', professorName, 'student:', studentName);
+						console.log('AudioContext available:', !!audioContext);
+						// Inline notification logic
+						try {
+							// Play attention-grabbing notification sound
+							if (audioContext) {
+								console.log('AudioContext state:', audioContext.state);
+								// Resume AudioContext if it's suspended
+								if (audioContext.state === 'suspended') {
+									await audioContext.resume();
+									console.log('AudioContext resumed');
+								}
+								// Create a more prominent notification sound sequence
+								const playTone = (frequency: number, startTime: number, duration: number, volume: number = 0.4) => {
+									const oscillator = audioContext.createOscillator();
+									const gainNode = audioContext.createGain();
+									
+									oscillator.type = 'square'; // Square wave for more attention-grabbing sound
+									oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime + startTime);
+									oscillator.connect(gainNode);
+									
+									gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+									gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.05);
+									gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
+									gainNode.connect(audioContext.destination);
+									
+									oscillator.start(audioContext.currentTime + startTime);
+									oscillator.stop(audioContext.currentTime + startTime + duration);
+								};
+
+								// Play a distinctive 3-tone notification sequence (like phone ringing)
+								playTone(1000, 0, 0.2, 0.5);      // High tone
+								playTone(800, 0.3, 0.2, 0.5);     // Medium tone  
+								playTone(1000, 0.6, 0.2, 0.5);    // High tone again
+								
+								// Add a second burst after a pause for extra attention
+								playTone(1200, 1.2, 0.15, 0.4);   // Very high tone
+								playTone(900, 1.4, 0.15, 0.4);    // Medium-high tone
+								playTone(1200, 1.6, 0.15, 0.4);   // Very high tone again
+								console.log('Notification sound sequence triggered');
+							}
+
+							// Show browser notification
+							if (notificationPermission === 'granted') {
+								new Notification('Entretien Terminé', {
+									body: `${professorName} a terminé l'entretien avec ${studentName}. Le professeur est maintenant disponible.`,
+									icon: '/ifag-logo.png',
+									badge: '/ifag-logo.png',
+									tag: 'interview-completed',
+									requireInteraction: true,
+								});
+							}
+
+							// Show in-app notification
+							const notificationElement = document.createElement('div');
+							notificationElement.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg z-50 max-w-sm';
+							notificationElement.innerHTML = `
+								<div class="flex items-center">
+									<div class="flex-shrink-0">
+										<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+											<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+										</svg>
+									</div>
+									<div class="ml-3">
+										<p class="text-sm font-medium">Entretien Terminé</p>
+										<p class="text-sm">${professorName} - ${studentName}</p>
+									</div>
+								</div>
+							`;
+							document.body.appendChild(notificationElement);
+							setTimeout(() => {
+								if (document.body.contains(notificationElement)) {
+									document.body.removeChild(notificationElement);
+								}
+							}, 5000);
+						} catch (error) {
+							console.warn('Failed to show notification:', error);
+						}
+					} else {
+						console.log('Missing professor or student name, skipping notification');
+					}
+				} else {
+					console.log('Not a receptionist or no payload data, skipping notification');
+				}
+				
+				loadDateData(); // refresh data for all users
+			})
+			.subscribe();
+
 		return () => {
 			mounted = false;
-			supabase.removeChannel(channel); // clean up subscription
+			supabase.removeChannel(professorChannel); // clean up subscription
+			supabase.removeChannel(completedChannel); // clean up subscription
 		};
-	}, [selectedDate, initializeProfessorData, loadDateData, loadAdmissionStudents]);
+	}, [selectedDate, initializeProfessorData, loadDateData, loadAdmissionStudents, userRole]);
 
 	// Add student to queue - fixed
 	const addStudentToQueue = useCallback(
@@ -749,18 +894,35 @@ const InterviewQueueSystem = () => {
 
 				console.log('Successfully completed interview');
 
-				// Clear the evaluation completion status for this student
-				const currentStudentAdmission = admissionStudents.find(
-					(s) => s.nom && s.prenom && `${s.nom} ${s.prenom}` === professor.currentStudent?.name
-				);
-				if (currentStudentAdmission?.id) {
-					const evaluationKey = `${currentStudentAdmission.id}-${professorId}`;
-					setCompletedEvaluations((prev) => {
-						const newSet = new Set(prev);
-						newSet.delete(evaluationKey);
-						return newSet;
-					});
+				// Trigger notification for receptionist (if this is the receptionist completing it)
+				if (userRole === 'receptionist') {
+					// Play sound notification
+					if (audioContext) {
+						try {
+							const oscillator1 = audioContext.createOscillator();
+							const oscillator2 = audioContext.createOscillator();
+							const gainNode = audioContext.createGain();
+							oscillator1.type = 'sine';
+							oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
+							oscillator1.connect(gainNode);
+							oscillator2.type = 'sine';
+							oscillator2.frequency.setValueAtTime(1000, audioContext.currentTime);
+							oscillator2.connect(gainNode);
+							gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+							gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+							gainNode.connect(audioContext.destination);
+							oscillator1.start();
+							oscillator2.start(audioContext.currentTime + 0.15);
+							oscillator1.stop(audioContext.currentTime + 0.15);
+							oscillator2.stop(audioContext.currentTime + 0.3);
+						} catch (error) {
+							console.warn('Failed to play notification sound:', error);
+						}
+					}
 				}
+
+				// Keep the evaluation completion status - don't clear it
+				// Once an evaluation is completed, it should stay completed
 
 				// Create completed interview object
 				const completedInterview: CompletedInterview = {
@@ -799,8 +961,114 @@ const InterviewQueueSystem = () => {
 				setError(`Failed to complete interview: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			}
 		},
+		[currentData, selectedDate, loadDateData, admissionStudents, userRole, audioContext]
+	);
+
+	// Revert student from interview back to queue
+	const revertStudentToQueue = useCallback(
+		async (professorId: number) => {
+			try {
+				setError(null);
+				const professor = currentData.professors.find((p: Professor) => p.id === professorId);
+				if (!professor || !professor.currentStudent) return;
+
+				// Confirm action
+				const confirmRevert = window.confirm(
+					`Êtes-vous sûr de vouloir renvoyer ${professor.currentStudent.name} dans la file d'attente?\n\nCeci annulera l'entretien en cours.`
+				);
+				if (!confirmRevert) return;
+
+				// Find the next queue number
+				const maxQueueNumber = Math.max(0, ...currentData.waitingQueue.map(q => q.queueNumber));
+				const nextQueueNumber = maxQueueNumber + 1;
+
+				const revertData = {
+					student_id: professor.currentStudent.studentId,
+					name: professor.currentStudent.name,
+					queue_number: nextQueueNumber,
+					arrival_time: new Date().toISOString(),
+					status: 'waiting',
+					assigned_room: null,
+					interview_date: selectedDate,
+				};
+
+				// Insert back to queue and update professor status
+				const [queueInsert, professorUpdate] = await Promise.all([
+					supabase.from('interview_queue').insert(revertData),
+					supabase
+						.from('professor_status')
+						.update({
+							status: 'available',
+							current_student_id: null,
+							current_student_name: null,
+							interview_start_time: null,
+						})
+						.eq('professor_id', professorId)
+						.eq('date', selectedDate),
+				]);
+
+				if (queueInsert.error) throw queueInsert.error;
+				if (professorUpdate.error) throw professorUpdate.error;
+
+				console.log('Successfully reverted student to queue');
+
+				// Clear any completed evaluation for this student
+				const currentStudentAdmission = admissionStudents.find(
+					(s) => s.nom && s.prenom && `${s.nom} ${s.prenom}` === professor.currentStudent?.name
+				);
+				if (currentStudentAdmission?.id) {
+					const evaluationKey = `${currentStudentAdmission.id}-${professorId}`;
+					setCompletedEvaluations((prev) => {
+						const newSet = new Set(prev);
+						newSet.delete(evaluationKey);
+						return newSet;
+					});
+				}
+
+				// Create queue entry for local state
+				const queueEntry: QueueEntry = {
+					studentId: professor.currentStudent.studentId,
+					name: professor.currentStudent.name,
+					queueNumber: nextQueueNumber,
+					arrivalTime: new Date(),
+					status: 'waiting',
+					assignedRoom: null,
+				};
+
+				// Update local state
+				setDateData((prev) => ({
+					...prev,
+					[selectedDate]: {
+						...currentData,
+						waitingQueue: [...currentData.waitingQueue, queueEntry],
+						professors: currentData.professors.map((p: Professor) =>
+							p.id === professorId
+								? {
+										...p,
+										status: 'available',
+										currentStudent: null,
+										interviewStartTime: null,
+								  }
+								: p
+						),
+					},
+				}));
+
+				// Show success message
+				alert(`${professor.currentStudent.name} a été renvoyé(e) dans la file d'attente.`);
+
+				// Trigger data refresh to ensure real-time updates
+				setTimeout(() => {
+					loadDateData();
+				}, 500);
+			} catch (error) {
+				console.error('Error reverting student to queue:', error);
+				setError(`Failed to revert student: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+		},
 		[currentData, selectedDate, loadDateData, admissionStudents]
 	);
+
 
 	// Generate unique student ID
 	const generateStudentId = useCallback((program: string, name: string) => {
@@ -963,6 +1231,8 @@ const InterviewQueueSystem = () => {
 					testRequired: data.test_required,
 					testScores: data.test_scores,
 					validation: data.validation,
+					validationComment: data.validation_comment || '',
+					studentStatus: data.student_status || 'en_cours',
 					interviewDate: data.interview_date,
 					dateCreated: new Date(data.date_created),
 					salesPersonId: data.sales_person_id,
@@ -992,12 +1262,36 @@ const InterviewQueueSystem = () => {
 			} catch (error) {
 				console.error('Error saving admission student:', error);
 				console.error('Full error details:', error);
+				console.error('Student data being saved:', admissionData);
+				console.error('Sales ID:', salesId);
 
-				// Check if it's a table not found error
-				if (error && typeof error === 'object' && 'code' in error && error.code === '42P01') {
-					setError(
-						'Database table not found. Please run the SQL script to create the admission_students table.'
-					);
+				// Enhanced error handling with specific error codes
+				if (error && typeof error === 'object' && 'code' in error) {
+					const errorCode = (error as { code?: string }).code;
+					const errorMessage = (error as { message?: string }).message || 'Unknown database error';
+					
+					console.error('Database error code:', errorCode);
+					console.error('Database error message:', errorMessage);
+					
+					switch (errorCode) {
+						case '42P01':
+							setError('Database table not found. Please run create_admission_students_table.sql');
+							break;
+						case '42703':
+							setError('Database column missing. Please run add_missing_columns.sql');
+							break;
+						case 'PGRST204':
+							setError('Column not found in database. Please run add_missing_columns.sql in Supabase SQL editor');
+							break;
+						case '42501':
+							setError('Permission denied. Please run fix_admission_students_rls.sql to fix authentication');
+							break;
+						case '23505':
+							setError('Student with this information already exists in the database');
+							break;
+						default:
+							setError(`Database error (${errorCode}): ${errorMessage}`);
+					}
 				} else {
 					setError(
 						`Failed to save admission student: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -1032,6 +1326,8 @@ const InterviewQueueSystem = () => {
 					test_required: updatedStudent.testRequired,
 					test_scores: updatedStudent.testScores,
 					validation: updatedStudent.validation,
+					validation_comment: updatedStudent.validationComment || '',
+					student_status: updatedStudent.studentStatus || 'en_cours',
 					interview_date: updatedStudent.interviewDate,
 				})
 				.eq('id', updatedStudent.id);
@@ -1149,7 +1445,7 @@ const InterviewQueueSystem = () => {
 	// Handle login
 	const handleLogin = useCallback(
 		async (
-			role: 'receptionist' | 'professor' | 'superadmin' | 'sales',
+			role: 'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration',
 			profId?: number,
 			salesId?: number
 		) => {
@@ -1166,28 +1462,18 @@ const InterviewQueueSystem = () => {
 				localStorage.removeItem('salesId');
 				setCurrentView('students'); // Professor can view dashboard
 
-				// Set professor status to available when they log in
-				try {
-					await supabase
-						.from('professor_status')
-						.update({ status: 'available' })
-						.eq('professor_id', profId)
-						.eq('date', selectedDate);
-					console.log('Professor status set to available on login');
-
-					// Refresh data to show updated status
-					setTimeout(() => {
-						loadDateData();
-					}, 300);
-				} catch (error) {
-					console.error('Error setting professor status on login:', error);
-				}
+				// Professor login - status management removed, all professors stay available
 			} else if (role === 'sales' && salesId) {
 				setSalesId(salesId);
 				localStorage.setItem('salesId', salesId.toString());
 				localStorage.removeItem('professorId');
 				setCurrentView('sales'); // Sales goes directly to admissions
 				console.log('Sales user logged in with ID:', salesId);
+			} else if (role === 'administration') {
+				localStorage.removeItem('professorId');
+				localStorage.removeItem('salesId');
+				setCurrentView('administration'); // Administration goes to administration view
+				console.log('Administration user logged in');
 			} else {
 				localStorage.removeItem('professorId');
 				localStorage.removeItem('salesId');
@@ -1199,19 +1485,7 @@ const InterviewQueueSystem = () => {
 
 	// Handle logout
 	const handleLogout = useCallback(async () => {
-		// Set professor status to offline if professor is logging out
-		if (userRole === 'professor' && professorId) {
-			try {
-				await supabase
-					.from('professor_status')
-					.update({ status: 'offline' })
-					.eq('professor_id', professorId)
-					.eq('date', selectedDate);
-				console.log('Professor status set to offline on logout');
-			} catch (error) {
-				console.error('Error setting professor status on logout:', error);
-			}
-		}
+		// Professor logout - status management removed, all professors stay available
 
 		setIsLoggedIn(false);
 		setUserRole(null);
@@ -1748,9 +2022,14 @@ const InterviewQueueSystem = () => {
 
 			console.log('Interview evaluation saved successfully');
 
-			// Mark this student's evaluation as completed
+			// Mark this student's evaluation as completed immediately
 			const evaluationKey = `${evaluation.studentId}-${evaluation.professorId}`;
-			setCompletedEvaluations((prev) => new Set(prev).add(evaluationKey));
+			setCompletedEvaluations((prev) => {
+				const newSet = new Set(prev);
+				newSet.add(evaluationKey);
+				console.log('Added evaluation key:', evaluationKey, 'All keys:', Array.from(newSet));
+				return newSet;
+			});
 
 			// Close the form
 			setShowInterviewForm(false);
@@ -1758,9 +2037,16 @@ const InterviewQueueSystem = () => {
 
 			// Show success message
 			alert("Évaluation sauvegardée avec succès! Vous pouvez maintenant terminer l'entretien.");
+			
+			// Trigger data refresh to ensure everything is in sync - without overwriting local state
+			setTimeout(() => {
+				loadDateData();
+			}, 500);
 		} catch (error) {
 			console.error('Error saving interview evaluation:', error);
-			setError(`Failed to save evaluation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			setError(`Failed to save evaluation: ${errorMessage}`);
+			alert(`Erreur lors de la sauvegarde de l'évaluation: ${errorMessage}. Veuillez réessayer.`);
 		}
 	}, []);
 
@@ -1886,7 +2172,7 @@ const InterviewQueueSystem = () => {
 								professors={currentData.professors}
 								onAddToQueue={isReadOnly ? () => {} : addStudentToQueue}
 								onDeleteStudent={
-									isReadOnly || userRole !== 'superadmin'
+									isReadOnly || (userRole !== 'superadmin' && userRole !== 'administration')
 										? () => {}
 										: (student) => setDeleteModal({ show: true, student })
 								}
@@ -1996,7 +2282,7 @@ const InterviewQueueSystem = () => {
 													</Badge>
 												</div>
 												{professor.currentStudent && (
-													<div>
+													<div className='space-y-2'>
 														<p className='text-sm mb-1'>
 															Interviewing: #{professor.currentStudent.queueNumber} -{' '}
 															{professor.currentStudent.name}
@@ -2005,6 +2291,16 @@ const InterviewQueueSystem = () => {
 															<p className='text-xs text-muted-foreground'>
 																Started: {professor.interviewStartTime.toLocaleTimeString()}
 															</p>
+														)}
+														{(userRole === 'superadmin' || userRole === 'receptionist' || userRole === 'administration') && (
+															<Button
+																onClick={() => revertStudentToQueue(professor.id)}
+																variant='outline'
+																size='sm'
+																className='text-xs h-7 px-2 border-orange-300 text-orange-700 hover:bg-orange-50'>
+																<RefreshCw className='h-3 w-3 mr-1' />
+																Revert
+															</Button>
 														)}
 													</div>
 												)}
@@ -2116,95 +2412,110 @@ const InterviewQueueSystem = () => {
 														const hasCompletedEvaluation = evaluationKey
 															? completedEvaluations.has(evaluationKey)
 															: false;
+														console.log(
+															`Prof ${professorId} - Student: ${professor.currentStudent?.name}, AdmissionID: ${currentStudentAdmission?.id}, EvalKey: ${evaluationKey}, HasCompleted: ${hasCompletedEvaluation}, AllKeys:`, 
+															Array.from(completedEvaluations)
+														);
 
 														if (!hasCompletedEvaluation) {
 															// Show evaluation button if evaluation not completed
 															return (
-																<Button
-																	onClick={async () => {
-																		console.log('Looking for student:', professor.currentStudent?.name);
-																		console.log(
-																			'Available admission students:',
-																			admissionStudents.map((s) => `${s.nom} ${s.prenom}`)
-																		);
+																<div className='space-y-3'>
+																	<Button
+																		onClick={async () => {
+																			console.log('Looking for student:', professor.currentStudent?.name);
+																			console.log(
+																				'Available admission students:',
+																				admissionStudents.map((s) => `${s.nom} ${s.prenom}`)
+																			);
 
-																		// If no admission students loaded, try to reload them
-																		if (admissionStudents.length === 0) {
-																			console.log('No admission students loaded, reloading...');
-																			try {
-																				await loadAdmissionStudents();
-																			} catch (error) {
-																				console.error('Failed to reload admission students:', error);
-																				alert('Failed to load student data. Please try again.');
-																				return;
+																			// If no admission students loaded, try to reload them
+																			if (admissionStudents.length === 0) {
+																				console.log('No admission students loaded, reloading...');
+																				try {
+																					await loadAdmissionStudents();
+																				} catch (error) {
+																					console.error('Failed to reload admission students:', error);
+																					alert('Failed to load student data. Please try again.');
+																					return;
+																				}
 																			}
-																		}
 
-																		// Find the admission student that matches the current student
-																		// Try multiple matching strategies
-																		let admissionStudent = admissionStudents.find(
-																			(s) =>
-																				s.nom &&
-																				s.prenom &&
-																				`${s.nom} ${s.prenom}` === professor.currentStudent?.name
-																		);
-
-																		// If exact match fails, try case-insensitive match
-																		if (!admissionStudent) {
-																			admissionStudent = admissionStudents.find(
+																			// Find the admission student that matches the current student
+																			// Try multiple matching strategies
+																			let admissionStudent = admissionStudents.find(
 																				(s) =>
 																					s.nom &&
 																					s.prenom &&
-																					`${s.nom} ${s.prenom}`.toLowerCase() ===
-																						professor.currentStudent?.name?.toLowerCase()
+																					`${s.nom} ${s.prenom}` === professor.currentStudent?.name
 																			);
-																		}
 
-																		// If still no match, try matching by studentId (last resort)
-																		if (!admissionStudent && professor.currentStudent?.studentId) {
-																			admissionStudent = admissionStudents.find(
-																				(s) =>
-																					s.nom &&
-																					s.prenom &&
-																					`${s.nom?.toLowerCase()}.${s.prenom?.toLowerCase()}` ===
+																			// If exact match fails, try case-insensitive match
+																			if (!admissionStudent) {
+																				admissionStudent = admissionStudents.find(
+																					(s) =>
+																						s.nom &&
+																						s.prenom &&
+																						`${s.nom} ${s.prenom}`.toLowerCase() ===
+																							professor.currentStudent?.name?.toLowerCase()
+																				);
+																			}
+
+																			// If still no match, try matching by studentId (last resort)
+																			if (!admissionStudent && professor.currentStudent?.studentId) {
+																				admissionStudent = admissionStudents.find(
+																					(s) =>
+																						s.nom &&
+																						s.prenom &&
+																						`${s.nom?.toLowerCase()}.${s.prenom?.toLowerCase()}` ===
+																							professor.currentStudent?.studentId
+																				);
+																			}
+
+																			// If still no match, try partial name matching
+																			if (!admissionStudent && professor.currentStudent?.name) {
+																				const currentName = professor.currentStudent.name.toLowerCase();
+																				admissionStudent = admissionStudents.find(
+																					(s) =>
+																						s.nom &&
+																						s.prenom &&
+																						currentName.includes(s.nom.toLowerCase()) &&
+																						currentName.includes(s.prenom.toLowerCase())
+																				);
+																			}
+
+																			if (admissionStudent) {
+																				console.log('Found matching student:', admissionStudent);
+																				handleStartInterview(admissionStudent);
+																			} else {
+																				console.error('No matching student found');
+																				console.log('Current student details:', professor.currentStudent);
+																				console.log('All admission students:', admissionStudents);
+																				alert(
+																					`Student data not found in admission system.\n\nLooking for: "${
+																						professor.currentStudent?.name
+																					}" or "${
 																						professor.currentStudent?.studentId
-																			);
-																		}
-
-																		// If still no match, try partial name matching
-																		if (!admissionStudent && professor.currentStudent?.name) {
-																			const currentName = professor.currentStudent.name.toLowerCase();
-																			admissionStudent = admissionStudents.find(
-																				(s) =>
-																					s.nom &&
-																					s.prenom &&
-																					currentName.includes(s.nom.toLowerCase()) &&
-																					currentName.includes(s.prenom.toLowerCase())
-																			);
-																		}
-
-																		if (admissionStudent) {
-																			console.log('Found matching student:', admissionStudent);
-																			handleStartInterview(admissionStudent);
-																		} else {
-																			console.error('No matching student found');
-																			console.log('Current student details:', professor.currentStudent);
-																			console.log('All admission students:', admissionStudents);
-																			alert(
-																				`Student data not found in admission system.\n\nLooking for: "${
-																					professor.currentStudent?.name
-																				}" or "${
-																					professor.currentStudent?.studentId
-																				}"\n\nAvailable students: ${admissionStudents
-																					.map((s) => `${s.nom} ${s.prenom}`)
-																					.join(', ')}`
-																			);
-																		}
-																	}}
-																	className='w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200'>
-																	<GraduationCap className='h-4 w-4 mr-2' />
-																	Evaluate Student
-																</Button>
+																					}"\n\nAvailable students: ${admissionStudents
+																						.map((s) => `${s.nom} ${s.prenom}`)
+																						.join(', ')}`
+																				);
+																			}
+																		}}
+																		className='w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200'>
+																		<GraduationCap className='h-4 w-4 mr-2' />
+																		Evaluate Student
+																	</Button>
+																	{(userRole === 'superadmin' || userRole === 'receptionist' || userRole === 'administration') && (
+																		<Button
+																			onClick={() => revertStudentToQueue(professorId)}
+																			variant='outline'
+																			className='w-full border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400'>
+																			<RefreshCw className='h-4 w-4 mr-2' />
+																			Revert to Queue
+																		</Button>
+																	)}
+																</div>
 															);
 														} else {
 															// Show completion message and complete interview button
@@ -2225,6 +2536,15 @@ const InterviewQueueSystem = () => {
 																		<CheckCircle className='h-4 w-4 mr-2' />
 																		Complete Interview
 																	</Button>
+																	{(userRole === 'superadmin' || userRole === 'receptionist' || userRole === 'administration') && (
+																		<Button
+																			onClick={() => revertStudentToQueue(professorId)}
+																			variant='outline'
+																			className='w-full border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400'>
+																			<RefreshCw className='h-4 w-4 mr-2' />
+																			Revert to Queue
+																		</Button>
+																	)}
 																</div>
 															);
 														}
@@ -2320,7 +2640,7 @@ const InterviewQueueSystem = () => {
 												</Badge>
 											</div>
 											{prof.currentStudent && (
-												<div>
+												<div className='space-y-2'>
 													<p className='text-sm mb-1'>
 														Interviewing: #{prof.currentStudent.queueNumber} - {prof.currentStudent.name}
 													</p>
@@ -2328,6 +2648,16 @@ const InterviewQueueSystem = () => {
 														<p className='text-xs text-muted-foreground'>
 															Started: {prof.interviewStartTime.toLocaleTimeString()}
 														</p>
+													)}
+													{(userRole === 'superadmin' || userRole === 'receptionist' || userRole === 'administration') && (
+														<Button
+															onClick={() => revertStudentToQueue(prof.id)}
+															variant='outline'
+															size='sm'
+															className='text-xs h-7 px-2 border-orange-300 text-orange-700 hover:bg-orange-50'>
+															<RefreshCw className='h-3 w-3 mr-1' />
+															Revert
+														</Button>
 													)}
 												</div>
 											)}
@@ -2385,14 +2715,15 @@ const InterviewQueueSystem = () => {
 											currentData.professors.find((p) => p.id === professorId)?.name || 'View Only'
 										})`}
 									{userRole === 'sales' && ` - Sales (ID: ${salesId})`}
+									{userRole === 'administration' && ' - Administration'}
 								</p>
 							</div>
 						</div>
 
 						{/* Controls */}
 						<div className='flex flex-col sm:flex-row items-start sm:items-center gap-4'>
-							{/* Hide date picker when superadmin is on admission part */}
-							{!(userRole === 'superadmin' && currentView === 'sales') && (
+							{/* Hide date picker when superadmin or administration is on admission part */}
+							{!(userRole === 'superadmin' && currentView === 'sales') && userRole !== 'administration' && (
 								<div className='flex items-center gap-3'>
 									<CalendarComponent value={selectedDate} onChange={setSelectedDate} className='w-64' />
 									<Button
@@ -2403,6 +2734,54 @@ const InterviewQueueSystem = () => {
 										className='hover:bg-gray-50 transition-colors duration-200'>
 										<RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
 									</Button>
+									{userRole === 'receptionist' && (
+										<div className="relative">
+											<Button
+												variant='outline'
+												size='sm'
+												onClick={async () => {
+													if (notificationPermission === 'default') {
+														if ('Notification' in window) {
+															const permission = await Notification.requestPermission();
+															setNotificationPermission(permission);
+														}
+													} else if (notificationPermission === 'granted') {
+														// Test notification sound
+														if (audioContext) {
+															const oscillator1 = audioContext.createOscillator();
+															const oscillator2 = audioContext.createOscillator();
+															const gainNode = audioContext.createGain();
+															oscillator1.type = 'sine';
+															oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
+															oscillator1.connect(gainNode);
+															oscillator2.type = 'sine';
+															oscillator2.frequency.setValueAtTime(1000, audioContext.currentTime);
+															oscillator2.connect(gainNode);
+															gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+															gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+															gainNode.connect(audioContext.destination);
+															oscillator1.start();
+															oscillator2.start(audioContext.currentTime + 0.15);
+															oscillator1.stop(audioContext.currentTime + 0.15);
+															oscillator2.stop(audioContext.currentTime + 0.3);
+														}
+													} else {
+														alert('Notifications sont bloquées. Veuillez activer les notifications dans les paramètres du navigateur.');
+													}
+												}}
+												className={`hover:bg-gray-50 transition-colors duration-200 ${
+													notificationPermission === 'granted' ? 'text-green-600 border-green-300' : 
+													notificationPermission === 'denied' ? 'text-red-600 border-red-300' : ''
+												}`}>
+												<Bell className={`h-4 w-4 ${notificationPermission === 'granted' ? 'fill-current' : ''}`} />
+											</Button>
+											<div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 whitespace-nowrap">
+												{notificationPermission === 'granted' ? 'Test son' :
+												 notificationPermission === 'denied' ? 'Bloqué' :
+												 'Activer'}
+											</div>
+										</div>
+									)}
 								</div>
 							)}
 
@@ -2427,18 +2806,33 @@ const InterviewQueueSystem = () => {
 
 							{/* Navigation */}
 							<div className='flex gap-2 flex-wrap'>
-								<Button
-									onClick={() => setCurrentView('students')}
-									variant={currentView === 'students' ? 'default' : 'outline'}
-									size='sm'
-									className={
-										currentView === 'students'
-											? 'bg-indigo-600 hover:bg-indigo-700 text-white transition-colors duration-200'
-											: 'border-indigo-300 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-400 transition-all duration-200'
-									}>
-									<Users className='h-4 w-4 mr-2' />
-									Dashboard
-								</Button>
+								{userRole === 'administration' ? (
+									<Button
+										onClick={() => setCurrentView('administration')}
+										variant={currentView === 'administration' ? 'default' : 'outline'}
+										size='sm'
+										className={
+											currentView === 'administration'
+												? 'bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200'
+												: 'border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200'
+										}>
+										<Building className='h-4 w-4 mr-2' />
+										Administration
+									</Button>
+								) : (
+									<>
+										<Button
+											onClick={() => setCurrentView('students')}
+											variant={currentView === 'students' ? 'default' : 'outline'}
+											size='sm'
+											className={
+												currentView === 'students'
+													? 'bg-indigo-600 hover:bg-indigo-700 text-white transition-colors duration-200'
+													: 'border-indigo-300 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-400 transition-all duration-200'
+											}>
+											<Users className='h-4 w-4 mr-2' />
+											Dashboard
+										</Button>
 								{userRole === 'superadmin' &&
 									currentData.professors.map((professor: Professor) => (
 										<Button
@@ -2495,6 +2889,8 @@ const InterviewQueueSystem = () => {
 										All Admissions
 									</Button>
 								)}
+									</>
+								)}
 								<Button onClick={handleLogout} variant='outline' size='sm' className='ml-4'>
 									Logout
 								</Button>
@@ -2531,6 +2927,11 @@ const InterviewQueueSystem = () => {
 								onAddToRegistry={addAdmissionToRegistry}
 							/>
 						)}
+						{currentView === 'administration' && (
+							<AdministrationView
+								students={admissionStudents}
+							/>
+						)}
 					</>
 				)}
 			</div>
@@ -2543,50 +2944,6 @@ const InterviewQueueSystem = () => {
 				onCancel={() => setDeleteModal({ show: false, student: null })}
 			/>
 
-			{/* Simple Chat System */}
-			{isLoggedIn && (
-				<SimpleChatSystem
-					currentUser={{
-						id:
-							userRole === 'professor' && professorId
-								? `prof-${professorId}`
-								: userRole === 'sales' && salesId
-								? `sales-${salesId}`
-								: userRole === 'receptionist'
-								? 'receptionist-1'
-								: 'superadmin-1',
-						name:
-							userRole === 'professor' && professorId
-								? professorId === 1
-									? 'Prof. Mansouri'
-									: professorId === 2
-									? 'Prof. Bedaida'
-									: professorId === 3
-									? 'Prof. Touati'
-									: `Professor ${professorId}`
-								: userRole === 'sales' && salesId
-								? salesId === 1
-									? 'Samir Hadjout'
-									: salesId === 2
-									? 'Samy Bouaddou'
-									: salesId === 3
-									? 'Imen Mouzaoui'
-									: salesId === 4
-									? 'Wassim Benkhannouf'
-									: salesId === 5
-									? 'Gassbi Wassil'
-									: salesId === 6
-									? 'Adem Bentayeb'
-									: salesId === 7
-									? 'Lyna Guita'
-									: `Sales ${salesId}`
-								: userRole === 'receptionist'
-								? 'Receptionist'
-								: 'Super Admin',
-						role: userRole || 'receptionist',
-					}}
-				/>
-			)}
 
 			{/* Undo Toast Notifications */}
 			{showUndoToast && lastAddedStudent && (

@@ -147,7 +147,8 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 		const day = String(date.getDate()).padStart(2, '0');
 		const dateString = `${year}-${month}-${day}`;
 		onChange(dateString);
-		// Keep popover open; close is user-controlled
+		// Close the calendar when a date is selected
+		setIsOpen(false);
 	};
 
 	const isSelectedDate = (date: Date) => {
@@ -165,6 +166,7 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, className =
 		const today = new Date();
 		setCurrentMonth(today);
 		selectDate(today);
+		// selectDate already closes the calendar
 	};
 
 	const clearDate = () => {

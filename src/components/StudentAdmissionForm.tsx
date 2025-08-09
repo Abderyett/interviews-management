@@ -374,6 +374,8 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		return salesIds.map((id) => ({ id, name: getSalesPersonName(id) }));
 	}, [students]);
 
+
+
 	// Filter students based on selected criteria
 	const filteredStudents = useMemo(() => {
 		let filtered = students;
@@ -988,6 +990,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																			[field]: parseFloat(e.target.value),
 																		}))
 																	}
+																	onWheel={(e) => e.currentTarget.blur()}
 																	className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 																	required
 																/>
@@ -1082,6 +1085,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																			},
 																		}))
 																	}
+																	onWheel={(e) => e.currentTarget.blur()}
 																	className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 																/>
 															</div>
@@ -1126,7 +1130,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 												</div>
 											)}
 
-											{/* Student Status - Visible to all, editable by SuperAdmin only */}
+											{/* Student Status - Visible to all, editable by SuperAdmin and Sales */}
 											{(userRole === 'superadmin' || userRole === 'sales') && (
 												<div className='relative'>
 													<label className='block text-sm font-medium mb-2'>Student Status</label>
@@ -1136,7 +1140,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 															setShowDropdowns((prev) => ({ ...prev, studentStatus: !prev.studentStatus }))
 														}
 														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'
-														disabled={userRole !== 'superadmin'}>
+														disabled={userRole !== 'superadmin' && userRole !== 'sales'}>
 														<span
 															className={
 																formData.studentStatus ? 'text-foreground' : 'text-muted-foreground'
@@ -1146,10 +1150,10 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																		?.label || 'Select Status'
 																: 'Select Status'}
 														</span>
-														{userRole === 'superadmin' && <ChevronDown className='h-4 w-4' />}
+														{(userRole === 'superadmin' || userRole === 'sales') && <ChevronDown className='h-4 w-4' />}
 													</button>
 
-													{showDropdowns.studentStatus && userRole === 'superadmin' && (
+													{showDropdowns.studentStatus && (userRole === 'superadmin' || userRole === 'sales') && (
 														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
 															{STUDENT_STATUS.map((status) => (
 																<button
@@ -1235,6 +1239,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																		},
 																	}))
 																}
+																onWheel={(e) => e.currentTarget.blur()}
 																className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 															/>
 														</div>
@@ -1260,6 +1265,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																		},
 																	}))
 																}
+																onWheel={(e) => e.currentTarget.blur()}
 																className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 															/>
 														</div>

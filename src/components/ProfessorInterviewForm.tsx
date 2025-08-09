@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
 	User,
 	GraduationCap,
@@ -10,6 +10,8 @@ import {
 	Save,
 	X,
 	ChevronDown,
+	Cloud,
+	CloudOff,
 } from 'lucide-react';
 
 interface Student {
@@ -204,6 +206,76 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 		membreJury: '',
 		dateEvaluation: new Date(),
 	});
+
+	// Auto-save state
+	const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+	const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+	// Generate unique localStorage key for this evaluation
+	const storageKey = `professor_evaluation_${professorId}_${student.id}`;
+
+	// Load saved data from localStorage on component mount
+	useEffect(() => {
+		const savedData = localStorage.getItem(storageKey);
+		if (savedData) {
+			try {
+				const parsedData = JSON.parse(savedData);
+				setFormData((prev) => ({
+					...prev,
+					...parsedData,
+					// Keep student and professor IDs from props
+					studentId: student.id || 0,
+					professorId,
+					dateEvaluation: parsedData.dateEvaluation ? new Date(parsedData.dateEvaluation) : new Date(),
+				}));
+				setLastSaved(new Date(parsedData._lastSaved));
+				console.log('Restored evaluation data from localStorage');
+			} catch (error) {
+				console.warn('Failed to restore evaluation data:', error);
+				localStorage.removeItem(storageKey);
+			}
+		}
+	}, [storageKey, student.id, professorId]);
+
+	// Debounced save to localStorage
+	const debouncedSave = useCallback((data: Partial<InterviewEvaluation>) => {
+		const saveTimer = setTimeout(() => {
+			try {
+				setAutoSaveStatus('saving');
+				const dataToSave = {
+					...data,
+					_lastSaved: new Date().toISOString(),
+				};
+				localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+				setAutoSaveStatus('saved');
+				setLastSaved(new Date());
+				console.log('Auto-saved evaluation data');
+			} catch (error) {
+				console.error('Failed to auto-save evaluation data:', error);
+				setAutoSaveStatus('error');
+			}
+		}, 1000); // 1 second debounce
+
+		return () => clearTimeout(saveTimer);
+	}, [storageKey]);
+
+	// Auto-save whenever form data changes
+	useEffect(() => {
+		const cleanup = debouncedSave(formData);
+		return cleanup;
+	}, [formData, debouncedSave]);
+
+	// Clear localStorage data after successful submission
+	const clearStoredData = useCallback(() => {
+		localStorage.removeItem(storageKey);
+		setLastSaved(null);
+		setAutoSaveStatus('saved');
+		console.log('Cleared stored evaluation data');
+	}, [storageKey]);
+
+	// Note: We keep localStorage data even if form is closed without submission
+	// This allows professors to recover their work if they accidentally close the form
+	// Data is only cleared on successful submission via handleSave
 
 	const steps = [
 		{
@@ -473,12 +545,15 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 				<div className='space-y-6'>
 					<div className='text-center mb-8'>
 						<h2 className='text-2xl font-bold text-gray-900'>Decision du Jury</h2>
+						<p className='text-sm text-gray-600 mt-2'>
+							Tous les champs sont optionnels. Vous pouvez sauvegarder une évaluation partielle.
+						</p>
 					</div>
 
 					<div className='space-y-6'>
 						{/* Decision Dropdown */}
 						<div>
-							<label className='block text-lg font-medium text-gray-900 mb-4'>Decision jury</label>
+							<label className='block text-lg font-medium text-gray-900 mb-4'>Decision jury (optionnel)</label>
 							<div className='relative'>
 								<button
 									type='button'
@@ -513,7 +588,7 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 
 						{/* Jury Member Dropdown */}
 						<div>
-							<label className='block text-lg font-medium text-gray-900 mb-4'>Membre du jury</label>
+							<label className='block text-lg font-medium text-gray-900 mb-4'>Membre du jury (optionnel)</label>
 							<div className='relative'>
 								<button
 									type='button'
@@ -547,8 +622,11 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 						{/* Global Comment */}
 						<div>
 							<label className='block text-lg font-medium text-gray-900 mb-4'>
-								Commentaire (appreciation globale de l'entrevue, justification de la decision)
+								Commentaire global (optionnel)
 							</label>
+							<p className='text-sm text-gray-500 mb-2'>
+								Appréciation globale de l'entrevue, justification de la décision
+							</p>
 							<textarea
 								value={formData.commentaireGlobal || ''}
 								onChange={(e) => setFormData((prev) => ({ ...prev, commentaireGlobal: e.target.value }))}
@@ -571,21 +649,18 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 			return;
 		}
 
-		if (
-			!formData.situationEtudes ||
-			formData.motivationDomaine === 0 ||
-			formData.motivationIFAG === 0 ||
-			formData.projetEtudes === 0 ||
-			formData.projetProfessionnel === 0 ||
-			formData.aisanceVerbale === 0 ||
-			formData.interactionJury === 0 ||
-			formData.cultureGenerale === 0 ||
-			!formData.decisionJury ||
-			!formData.commentaireGlobal ||
-			!formData.membreJury
-		) {
-			alert('Veuillez remplir tous les champs obligatoires et donner une note superieure a 0');
-			return;
+		// Optional validation: Show warning if critical fields are missing, but allow submission
+		const missingCriticalFields = [];
+		if (!formData.membreJury) missingCriticalFields.push('Membre du jury');
+		if (!formData.decisionJury || formData.decisionJury === 'indecis') missingCriticalFields.push('Décision finale');
+		
+		if (missingCriticalFields.length > 0) {
+			const proceed = window.confirm(
+				`Attention: Les champs suivants ne sont pas remplis: ${missingCriticalFields.join(', ')}.\n\nVoulez-vous continuer la sauvegarde ?`
+			);
+			if (!proceed) {
+				return;
+			}
 		}
 
 		// Ensure studentId is properly set
@@ -595,6 +670,10 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 		} as InterviewEvaluation;
 
 		console.log('Saving evaluation for student ID:', student.id, 'Student name:', student.nom, student.prenom);
+		
+		// Clear localStorage data before submitting
+		clearStoredData();
+		
 		onSave(evaluationData);
 	};
 
@@ -645,21 +724,98 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 				<div className='px-6 py-4 border-b flex items-center justify-between'>
 					<div className='flex items-center space-x-4'>
 						<h1 className='text-xl font-bold text-gray-900'>Evaluation d'entretien</h1>
-						<div className='flex items-center space-x-2'>
-							<div className='text-sm text-gray-500'>
-								{currentStep + 1} / {steps.length}
+						<div className='flex items-center space-x-4'>
+							<div className='flex items-center space-x-2'>
+								<div className='text-sm text-gray-500'>
+									{currentStep + 1} / {steps.length}
+								</div>
+								<div className='w-32 bg-gray-200 rounded-full h-2'>
+									<div
+										className='bg-indigo-600 h-2 rounded-full transition-all duration-300'
+										style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}></div>
+								</div>
 							</div>
-							<div className='w-32 bg-gray-200 rounded-full h-2'>
-								<div
-									className='bg-indigo-600 h-2 rounded-full transition-all duration-300'
-									style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}></div>
+							
+							{/* Auto-save indicator */}
+							<div className='flex items-center space-x-2'>
+								{autoSaveStatus === 'saving' && (
+									<>
+										<CloudOff className='h-4 w-4 text-yellow-500 animate-pulse' />
+										<span className='text-xs text-yellow-600'>Sauvegarde...</span>
+									</>
+								)}
+								{autoSaveStatus === 'saved' && lastSaved && (
+									<>
+										<Cloud className='h-4 w-4 text-green-500' />
+										<span className='text-xs text-green-600'>
+											Sauvé {lastSaved.toLocaleTimeString()}
+										</span>
+									</>
+								)}
+								{autoSaveStatus === 'error' && (
+									<>
+										<CloudOff className='h-4 w-4 text-red-500' />
+										<span className='text-xs text-red-600'>Erreur sauvegarde</span>
+									</>
+								)}
 							</div>
 						</div>
 					</div>
-					<button onClick={onClose} className='text-gray-400 hover:text-gray-600 transition-colors'>
-						<X className='h-6 w-6' />
-					</button>
+					<div className='flex items-center space-x-2'>
+						{lastSaved && (
+							<button
+								onClick={() => {
+									if (window.confirm('Êtes-vous sûr de vouloir supprimer le brouillon sauvegardé et recommencer ?')) {
+										clearStoredData();
+										// Reset form to initial state
+										setFormData({
+											studentId: student.id || 0,
+											professorId,
+											situationEtudes: '',
+											motivationDomaine: 0,
+											motivationDomaineComment: '',
+											motivationIFAG: 0,
+											motivationIFAGComment: '',
+											projetEtudes: 0,
+											projetEtudesComment: '',
+											projetProfessionnel: 0,
+											projetProfessionnelComment: '',
+											aisanceVerbale: 0,
+											aisanceVerbaleComment: '',
+											interactionJury: 0,
+											interactionJuryComment: '',
+											cultureGenerale: 0,
+											cultureGeneraleComment: '',
+											decisionJury: 'indecis',
+											commentaireGlobal: '',
+											membreJury: '',
+											dateEvaluation: new Date(),
+										});
+										setCurrentStep(0);
+									}
+								}}
+								className='text-xs text-orange-600 hover:text-orange-700 px-2 py-1 border border-orange-300 rounded transition-colors'
+								title='Supprimer le brouillon et recommencer'>
+								Nouveau brouillon
+							</button>
+						)}
+						<button onClick={onClose} className='text-gray-400 hover:text-gray-600 transition-colors'>
+							<X className='h-6 w-6' />
+						</button>
+					</div>
 				</div>
+
+				{/* Data restoration notification */}
+				{lastSaved && (
+					<div className='px-6 py-3 bg-blue-50 border-b border-blue-200'>
+						<div className='flex items-center space-x-2'>
+							<Cloud className='h-4 w-4 text-blue-600' />
+							<span className='text-sm text-blue-800'>
+								Données d'évaluation restaurées depuis la dernière sauvegarde ({lastSaved.toLocaleString()})
+							</span>
+						</div>
+					</div>
+				)}
 
 				{/* Content */}
 				<div className='flex-1 overflow-y-auto px-6 py-8'>

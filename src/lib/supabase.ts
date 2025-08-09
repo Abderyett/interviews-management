@@ -145,67 +145,6 @@ export type Database = {
           created_at?: string
         }
       }
-      chat_users: {
-        Row: {
-          id: string
-          user_id: string
-          name: string
-          role: 'superadmin' | 'receptionist' | 'professor'
-          online: boolean
-          last_seen: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          name: string
-          role: 'superadmin' | 'receptionist' | 'professor'
-          online?: boolean
-          last_seen?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          name?: string
-          role?: 'superadmin' | 'receptionist' | 'professor'
-          online?: boolean
-          last_seen?: string
-          created_at?: string
-        }
-      }
-      chat_messages: {
-        Row: {
-          id: string
-          sender_id: string
-          sender_name: string
-          sender_role: 'superadmin' | 'receptionist' | 'professor'
-          content: string
-          message_type: 'broadcast' | 'direct'
-          recipient_id: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          sender_id: string
-          sender_name: string
-          sender_role: 'superadmin' | 'receptionist' | 'professor'
-          content: string
-          message_type: 'broadcast' | 'direct'
-          recipient_id?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          sender_id?: string
-          sender_name?: string
-          sender_role?: 'superadmin' | 'receptionist' | 'professor'
-          content?: string
-          message_type?: 'broadcast' | 'direct'
-          recipient_id?: string | null
-          created_at?: string
-        }
-      }
     }
   }
 }
