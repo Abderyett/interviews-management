@@ -19,7 +19,7 @@ import { CalendarComponent } from './Calendar';
 import { AdmissionDashboard } from './AdmissionDashboard';
 import { supabase } from '../lib/supabase';
 
-interface Student {
+interface AdmissionStudent {
 	id?: number;
 	nom: string;
 	prenom: string;
@@ -77,9 +77,9 @@ interface InterviewEvaluation {
 interface StudentAdmissionFormProps {
 	userRole: 'sales' | 'superadmin';
 	salesPersonId?: number;
-	students?: Student[];
-	onSaveStudent: (student: Student) => void;
-	onUpdateStudent?: (student: Student) => void;
+	students?: AdmissionStudent[];
+	onSaveStudent: (student: AdmissionStudent) => void;
+	onUpdateStudent?: (student: AdmissionStudent) => void;
 	onDeleteStudent?: (studentId: number) => void;
 	onAddToRegistry?: (student: { studentId: string; name: string }, interviewDate: string) => void;
 }
@@ -251,10 +251,10 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	onDeleteStudent,
 }) => {
 	const [showForm, setShowForm] = useState(false);
-	const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+	const [editingStudent, setEditingStudent] = useState<AdmissionStudent | null>(null);
 	const [modalMode, setModalMode] = useState<'add' | 'edit' | 'test'>('add');
 	const [showDeleteModal, setShowDeleteModal] = useState(false);
-	const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+	const [studentToDelete, setStudentToDelete] = useState<AdmissionStudent | null>(null);
 	const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 	const [filterSpecialite, setFilterSpecialite] = useState('');
 	const [filterSalesPerson, setFilterSalesPerson] = useState('');
@@ -264,7 +264,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	const [showEvaluationModal, setShowEvaluationModal] = useState(false);
 	const [loadingEvaluation, setLoadingEvaluation] = useState(false);
 
-	const [formData, setFormData] = useState<Partial<Student>>({
+	const [formData, setFormData] = useState<Partial<AdmissionStudent>>({
 		nom: '',
 		prenom: '',
 		mobile: '',
@@ -425,7 +425,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 
 		// Prevent double submission
 		if (isSubmitting) {
-			console.log('Form submission already in progress, ignoring duplicate submit');
+			console.debug('Form submission already in progress, ignoring duplicate submit');
 			return;
 		}
 
@@ -433,20 +433,20 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 			setIsSubmitting(true);
 
 			if (modalMode === 'edit' && editingStudent && onUpdateStudent) {
-				const updatedStudent: Student = {
+				const updatedStudent: AdmissionStudent = {
 					...editingStudent,
-					...(formData as Student),
+					...(formData as AdmissionStudent),
 					testRequired,
 				};
 				await onUpdateStudent(updatedStudent);
 			} else if (modalMode === 'test' && editingStudent && onUpdateStudent) {
-				const updatedStudent: Student = {
+				const updatedStudent: AdmissionStudent = {
 					...editingStudent,
 					testScores: formData.testScores,
 				};
 				await onUpdateStudent(updatedStudent);
 			} else {
-				const newStudent: Student = {
+				const newStudent: AdmissionStudent = {
 					nom: formData.nom || '',
 					prenom: formData.prenom || '',
 					mobile: formData.mobile || '',
@@ -469,7 +469,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 					interviewDate: formData.interviewDate,
 				};
 
-				console.log('Form submitting student data:', newStudent);
+				console.debug('Form submitting student data:', newStudent);
 				await onSaveStudent(newStudent);
 			}
 
@@ -507,7 +507,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setModalMode('add');
 	};
 
-	const handleEdit = (student: Student) => {
+	const handleEdit = (student: AdmissionStudent) => {
 		setEditingStudent(student);
 		setFormData({
 			...student,
@@ -516,7 +516,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setShowForm(true);
 	};
 
-	const handleAddTestResults = (student: Student) => {
+	const handleAddTestResults = (student: AdmissionStudent) => {
 		setEditingStudent(student);
 		setFormData({
 			testScores: student.testScores || {},
@@ -530,7 +530,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setShowDropdowns((prev) => ({ ...prev, [field]: false }));
 	};
 
-	const handleDeleteClick = (student: Student) => {
+	const handleDeleteClick = (student: AdmissionStudent) => {
 		setStudentToDelete(student);
 		setShowDeleteModal(true);
 	};
@@ -548,7 +548,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setStudentToDelete(null);
 	};
 
-	const handleViewEvaluation = async (student: Student) => {
+	const handleViewEvaluation = async (student: AdmissionStudent) => {
 		if (!student.id) {
 			alert('ID etudiant manquant');
 			return;
@@ -983,7 +983,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																	step='0.01'
 																	min='0'
 																	max='20'
-																	value={(formData[field as keyof Student] as number) || ''}
+																	value={(formData[field as keyof AdmissionStudent] as number) || ''}
 																	onChange={(e) =>
 																		setFormData((prev) => ({
 																			...prev,
@@ -1017,7 +1017,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																</label>
 																<input
 																	type='text'
-																	value={(formData[field as keyof Student] as string) || ''}
+																	value={(formData[field as keyof AdmissionStudent] as string) || ''}
 																	onChange={(e) =>
 																		setFormData((prev) => ({
 																			...prev,

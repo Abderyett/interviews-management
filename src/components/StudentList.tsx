@@ -310,7 +310,7 @@ export const StudentList: React.FC<StudentListProps> = ({
 													In Queue
 												</div>
 											)}
-											{!isInQueue && !isCompleted && !isInInterview && !readOnly && (
+											{!isInQueue && !isCompleted && !isInInterview && !readOnly && userRole !== 'administration' && (
 												<Button
 													onClick={() => onAddToQueue(student)}
 													size='sm'

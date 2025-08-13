@@ -3,7 +3,7 @@ import { GraduationCap, User, LogIn } from 'lucide-react';
 
 interface LoginProps {
 	onLogin: (
-		role: 'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration',
+		role: 'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration' | 'test_manager',
 		professorId?: number,
 		salesId?: number
 	) => void;
@@ -61,7 +61,7 @@ const CardContent = ({ children, className = '' }: { children: React.ReactNode; 
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 	const [selectedRole, setSelectedRole] = useState<
-		'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration' | null
+		'receptionist' | 'professor' | 'superadmin' | 'sales' | 'administration' | 'test_manager' | null
 	>(null);
 	const [username, setUsername] = useState('');
 	const [password, setPassword] = useState('');
@@ -81,6 +81,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 		administration: {
 			username: 'administration',
 			password: 'admin123',
+		},
+		test_manager: {
+			username: 'testmanager',
+			password: 'test123',
 		},
 		professors: [
 			{ id: 1, username: 'prof.mansouri', password: 'prof123', name: 'Prof. Mansouri', room: 'Room 7' },
@@ -138,6 +142,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 					onLogin('administration');
 				} else {
 					throw new Error('Invalid administration credentials');
+				}
+			} else if (selectedRole === 'test_manager') {
+				if (username === users.test_manager.username && password === users.test_manager.password) {
+					onLogin('test_manager');
+				} else {
+					throw new Error('Invalid test manager credentials');
 				}
 			}
 		} catch (err) {
@@ -222,6 +232,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 										<div className='text-sm text-gray-500'>View all students and validation status</div>
 									</div>
 								</Button>
+
+								<Button
+									onClick={() => setSelectedRole('test_manager')}
+									variant='outline'
+									className='w-full justify-start h-16 text-left'>
+									<GraduationCap className='h-6 w-6 mr-4 text-orange-600' />
+									<div>
+										<div className='font-semibold text-orange-600'>Test Manager</div>
+										<div className='text-sm text-gray-500'>Manage entrance tests and timers</div>
+									</div>
+								</Button>
 							</div>
 						) : (
 							<form onSubmit={handleLogin} className='space-y-4'>
@@ -243,9 +264,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 											<>
 												<User className='h-5 w-5 text-green-600' /> Sales Login
 											</>
-										) : (
+										) : selectedRole === 'administration' ? (
 											<>
 												<User className='h-5 w-5 text-blue-600' /> Administration Login
+											</>
+										) : (
+											<>
+												<GraduationCap className='h-5 w-5 text-orange-600' /> Test Manager Login
 											</>
 										)}
 									</div>
@@ -266,9 +291,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 										className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 										placeholder={
 											selectedRole === 'receptionist'
-												? 'receptionist'
+												? 'asma'
 												: selectedRole === 'sales'
 												? 'firstname.lastname'
+												: selectedRole === 'administration'
+												? 'administration'
+												: selectedRole === 'test_manager'
+												? 'testmanager'
 												: 'prof.username'
 										}
 										required

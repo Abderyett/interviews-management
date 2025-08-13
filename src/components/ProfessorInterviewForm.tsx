@@ -229,7 +229,7 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 					dateEvaluation: parsedData.dateEvaluation ? new Date(parsedData.dateEvaluation) : new Date(),
 				}));
 				setLastSaved(new Date(parsedData._lastSaved));
-				console.log('Restored evaluation data from localStorage');
+				console.debug('Restored evaluation data from localStorage');
 			} catch (error) {
 				console.warn('Failed to restore evaluation data:', error);
 				localStorage.removeItem(storageKey);
@@ -249,7 +249,7 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 				localStorage.setItem(storageKey, JSON.stringify(dataToSave));
 				setAutoSaveStatus('saved');
 				setLastSaved(new Date());
-				console.log('Auto-saved evaluation data');
+				console.debug('Auto-saved evaluation data');
 			} catch (error) {
 				console.error('Failed to auto-save evaluation data:', error);
 				setAutoSaveStatus('error');
@@ -270,7 +270,7 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 		localStorage.removeItem(storageKey);
 		setLastSaved(null);
 		setAutoSaveStatus('saved');
-		console.log('Cleared stored evaluation data');
+		console.debug('Cleared stored evaluation data');
 	}, [storageKey]);
 
 	// Note: We keep localStorage data even if form is closed without submission
@@ -669,7 +669,7 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 			studentId: student.id
 		} as InterviewEvaluation;
 
-		console.log('Saving evaluation for student ID:', student.id, 'Student name:', student.nom, student.prenom);
+		console.debug('Saving evaluation for student ID:', student.id, 'Student name:', student.nom, student.prenom);
 		
 		// Clear localStorage data before submitting
 		clearStoredData();
