@@ -2147,8 +2147,14 @@ const InterviewQueueSystem = () => {
 	}, []);
 
 	const StudentsView = () => {
-		const readOnlyRoles: Array<'professor' | 'sales' | 'test_manager'> = ['professor', 'sales', 'test_manager'];
-		const isReadOnly = userRole ? readOnlyRoles.includes(userRole as 'professor' | 'sales' | 'test_manager') : false;
+		const readOnlyRoles: Array<'professor' | 'sales' | 'test_manager'> = [
+			'professor',
+			'sales',
+			'test_manager',
+		];
+		const isReadOnly = userRole
+			? readOnlyRoles.includes(userRole as 'professor' | 'sales' | 'test_manager')
+			: false;
 
 		return (
 			<div className='space-y-6'>
@@ -2604,15 +2610,16 @@ const InterviewQueueSystem = () => {
 																		<GraduationCap className='h-4 w-4 mr-2' />
 																		Evaluate Student
 																	</Button>
-																	{userRole && ['superadmin', 'receptionist', 'administration'].includes(userRole) && (
-																		<Button
-																			onClick={() => revertStudentToQueue(professorId)}
-																			variant='outline'
-																			className='w-full border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400'>
-																			<RefreshCw className='h-4 w-4 mr-2' />
-																			Revert to Queue
-																		</Button>
-																	)}
+																	{userRole &&
+																		['superadmin', 'receptionist', 'administration'].includes(userRole) && (
+																			<Button
+																				onClick={() => revertStudentToQueue(professorId)}
+																				variant='outline'
+																				className='w-full border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400'>
+																				<RefreshCw className='h-4 w-4 mr-2' />
+																				Revert to Queue
+																			</Button>
+																		)}
 																</div>
 															);
 														} else {
@@ -2634,15 +2641,16 @@ const InterviewQueueSystem = () => {
 																		<CheckCircle className='h-4 w-4 mr-2' />
 																		Complete Interview
 																	</Button>
-																	{userRole && ['superadmin', 'receptionist', 'administration'].includes(userRole) && (
-																		<Button
-																			onClick={() => revertStudentToQueue(professorId)}
-																			variant='outline'
-																			className='w-full border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400'>
-																			<RefreshCw className='h-4 w-4 mr-2' />
-																			Revert to Queue
-																		</Button>
-																	)}
+																	{userRole &&
+																		['superadmin', 'receptionist', 'administration'].includes(userRole) && (
+																			<Button
+																				onClick={() => revertStudentToQueue(professorId)}
+																				variant='outline'
+																				className='w-full border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400'>
+																				<RefreshCw className='h-4 w-4 mr-2' />
+																				Revert to Queue
+																			</Button>
+																		)}
 																</div>
 															);
 														}
@@ -3028,20 +3036,21 @@ const InterviewQueueSystem = () => {
 												All Admissions
 											</Button>
 										)}
-										{userRole && ['sales', 'superadmin', 'receptionist', 'test_manager'].includes(userRole) && (
-											<Button
-												onClick={() => setCurrentView('test-management')}
-												variant={currentView === 'test-management' ? 'default' : 'outline'}
-												size='sm'
-												className={
-													currentView === 'test-management'
-														? 'bg-orange-600 hover:bg-orange-700 text-white transition-colors duration-200'
-														: 'border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400 transition-all duration-200'
-												}>
-												<Timer className='h-4 w-4 mr-2' />
-												Test Management
-											</Button>
-										)}
+										{userRole &&
+											['sales', 'superadmin', 'receptionist', 'test_manager'].includes(userRole) && (
+												<Button
+													onClick={() => setCurrentView('test-management')}
+													variant={currentView === 'test-management' ? 'default' : 'outline'}
+													size='sm'
+													className={
+														currentView === 'test-management'
+															? 'bg-orange-600 hover:bg-orange-700 text-white transition-colors duration-200'
+															: 'border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400 transition-all duration-200'
+													}>
+													<Timer className='h-4 w-4 mr-2' />
+													Test Management
+												</Button>
+											)}
 									</>
 								)}
 								<Button onClick={handleLogout} variant='outline' size='sm' className='ml-4'>

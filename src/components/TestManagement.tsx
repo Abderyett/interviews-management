@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Clock, Play, RotateCcw, Timer, User, CheckCircle, AlertCircle, Users, Eye, UserCheck, Search, UserPlus, UserMinus, UserX, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, Play, RotateCcw, Timer, User, CheckCircle, AlertCircle, Users, Eye, UserCheck, Search, UserMinus, UserX, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // AdmissionStudent interface - this should match the one in InterviewManagement.tsx
 interface AdmissionStudent {
@@ -99,7 +99,7 @@ const TestManagement: React.FC<TestManagementProps> = ({
 	students,
 	onUpdateStudent,
 	selectedDate,
-	interviewData,
+	interviewData: _interviewData, // Acknowledge parameter but don't use it
 	userRole,
 	onDateChange
 }) => {
@@ -773,7 +773,7 @@ const TestManagement: React.FC<TestManagementProps> = ({
 												{/* Test Status Badge */}
 												<span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(student.testStatus)}`}>
 													{getStatusIcon(student.testStatus)}
-													{student.testStatus.replace('_', ' ').toUpperCase()}
+													{(student.testStatus || 'not_started').replace('_', ' ').toUpperCase()}
 												</span>
 												
 												{/* Interview Status Badge */}
