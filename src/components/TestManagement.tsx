@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Clock, Play, RotateCcw, Timer, User, CheckCircle, AlertCircle, Users, Eye, UserCheck, Search, UserMinus, UserX, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, Play, RotateCcw, Timer, CheckCircle, Users, UserCheck, Search, UserX, Calendar, ChevronLeft, ChevronRight, AlertCircle, User } from 'lucide-react';
 
 // AdmissionStudent interface - this should match the one in InterviewManagement.tsx
 interface AdmissionStudent {
@@ -214,22 +214,6 @@ const TestManagement: React.FC<TestManagementProps> = ({
 		);
 	}, [students, localSelectedDate, searchTerm]);
 
-	// Determine interview status for a student (using stored database status)
-	const getInterviewStatus = useCallback((student: AdmissionStudent) => {
-		// Use the stored interview status from the database
-		const status = student.interviewStatus || 'not_registered';
-		
-		switch (status) {
-			case 'interviewing':
-				return { status: 'interviewing', icon: Eye, color: 'bg-purple-100 text-purple-800' };
-			case 'completed':
-				return { status: 'completed', icon: UserCheck, color: 'bg-green-100 text-green-800' };
-			case 'in_queue':
-				return { status: 'in_queue', icon: Users, color: 'bg-blue-100 text-blue-800' };
-			default:
-				return { status: 'not_registered', icon: User, color: 'bg-gray-100 text-gray-800' };
-		}
-	}, []);
 
 	// Calculate remaining time for a student
 	const calculateRemainingTime = useCallback((student: AdmissionStudent) => {
@@ -450,34 +434,14 @@ const TestManagement: React.FC<TestManagementProps> = ({
 		const completed = testStudents.filter(s => s.testStatus === 'completed').length;
 		const absent = testStudents.filter(s => s.testStatus === 'absent').length;
 
-		// Interview status statistics
-		const interviewingCount = testStudents.filter(s => getInterviewStatus(s).status === 'interviewing').length;
-		const interviewCompletedCount = testStudents.filter(s => getInterviewStatus(s).status === 'completed').length;
-		const inQueueCount = testStudents.filter(s => getInterviewStatus(s).status === 'in_queue').length;
-		const notRegisteredCount = testStudents.filter(s => getInterviewStatus(s).status === 'not_registered').length;
-
-		// Presence statistics
-		const presentCount = testStudents.filter(s => s.presenceStatus === 'present').length;
-		const absentPresenceCount = testStudents.filter(s => s.presenceStatus === 'absent').length;
-		const lateCount = testStudents.filter(s => s.presenceStatus === 'late').length;
-		const notCheckedCount = testStudents.filter(s => !s.presenceStatus || s.presenceStatus === 'not_checked').length;
-
 		return { 
 			total, 
 			notStarted, 
 			inProgress, 
 			completed, 
-			absent,
-			interviewingCount,
-			interviewCompletedCount,
-			inQueueCount,
-			notRegisteredCount,
-			presentCount,
-			absentPresenceCount,
-			lateCount,
-			notCheckedCount
+			absent
 		};
-	}, [testStudents, getInterviewStatus]);
+	}, [testStudents]);
 
 	return (
 		<div className="space-y-6">
@@ -497,18 +461,18 @@ const TestManagement: React.FC<TestManagementProps> = ({
 				</div>
 
 				{/* Date Picker Section */}
-				<div className="bg-white rounded-lg border p-4">
-					<div className="flex flex-col md:flex-row items-center gap-4">
+				<div className="flex items-center justify-between bg-white rounded-lg border p-4">
+					<div className="flex items-center gap-4">
 						<div className="flex items-center gap-2">
-							<Calendar className="h-5 w-5 text-blue-600" />
-							<span className="text-sm font-medium text-gray-700">Select Date:</span>
+							<Calendar className="h-5 w-5 text-indigo-600" />
+							<span className="text-sm font-medium text-gray-700">Test Date:</span>
 						</div>
 						
 						<div className="flex items-center gap-2">
 							{/* Previous Day Button */}
 							<button
 								onClick={goToPreviousDay}
-								className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+								className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
 								title="Previous Day"
 							>
 								<ChevronLeft className="h-4 w-4" />
@@ -519,13 +483,13 @@ const TestManagement: React.FC<TestManagementProps> = ({
 								type="date"
 								value={formatDateInput(localSelectedDate)}
 								onChange={(e) => handleDateChange(e.target.value)}
-								className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-w-[140px]"
 							/>
 
 							{/* Next Day Button */}
 							<button
 								onClick={goToNextDay}
-								className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+								className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
 								title="Next Day"
 							>
 								<ChevronRight className="h-4 w-4" />
@@ -534,20 +498,20 @@ const TestManagement: React.FC<TestManagementProps> = ({
 							{/* Today Button */}
 							<button
 								onClick={goToToday}
-								className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+								className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
 							>
 								Today
 							</button>
 						</div>
+					</div>
 
-						{/* Selected Date Display */}
-						<div className="flex-1 text-center md:text-left">
-							<div className="text-lg font-semibold text-gray-900">
-								{formatDate(localSelectedDate)}
-							</div>
-							<div className="text-sm text-gray-500">
-								{testStudents.length} student{testStudents.length === 1 ? '' : 's'} scheduled for testing
-							</div>
+					{/* Selected Date Display */}
+					<div className="text-right">
+						<div className="text-lg font-semibold text-gray-900">
+							{formatDate(localSelectedDate)}
+						</div>
+						<div className="text-sm text-gray-500">
+							{testStudents.length} student{testStudents.length === 1 ? '' : 's'} scheduled
 						</div>
 					</div>
 				</div>
@@ -633,81 +597,7 @@ const TestManagement: React.FC<TestManagementProps> = ({
 				</div>
 			</div>
 
-			{/* Interview Status Statistics */}
-			<div className="space-y-2">
-				<h3 className="text-sm font-medium text-gray-700">Interview Status</h3>
-				<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<Eye className="h-5 w-5 text-purple-600" />
-							<span className="text-sm font-medium text-purple-600">Interviewing</span>
-						</div>
-						<div className="text-2xl font-bold text-purple-900">{stats.interviewingCount}</div>
-					</div>
-					
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<UserCheck className="h-5 w-5 text-green-600" />
-							<span className="text-sm font-medium text-green-600">Interview Done</span>
-						</div>
-						<div className="text-2xl font-bold text-green-900">{stats.interviewCompletedCount}</div>
-					</div>
 
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<Users className="h-5 w-5 text-blue-600" />
-							<span className="text-sm font-medium text-blue-600">In Queue</span>
-						</div>
-						<div className="text-2xl font-bold text-blue-900">{stats.inQueueCount}</div>
-					</div>
-
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<User className="h-5 w-5 text-gray-600" />
-							<span className="text-sm font-medium text-gray-600">Not Registered</span>
-						</div>
-						<div className="text-2xl font-bold text-gray-900">{stats.notRegisteredCount}</div>
-					</div>
-				</div>
-			</div>
-
-			{/* Presence Status Statistics */}
-			<div className="space-y-2">
-				<h3 className="text-sm font-medium text-gray-700">Presence Status</h3>
-				<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<UserCheck className="h-5 w-5 text-green-600" />
-							<span className="text-sm font-medium text-green-600">Present</span>
-						</div>
-						<div className="text-2xl font-bold text-green-900">{stats.presentCount}</div>
-					</div>
-
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<UserX className="h-5 w-5 text-red-600" />
-							<span className="text-sm font-medium text-red-600">Absent</span>
-						</div>
-						<div className="text-2xl font-bold text-red-900">{stats.absentPresenceCount}</div>
-					</div>
-
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<UserMinus className="h-5 w-5 text-yellow-600" />
-							<span className="text-sm font-medium text-yellow-600">Late</span>
-						</div>
-						<div className="text-2xl font-bold text-yellow-900">{stats.lateCount}</div>
-					</div>
-
-					<div className="bg-white rounded-lg border p-4">
-						<div className="flex items-center gap-2">
-							<User className="h-5 w-5 text-gray-600" />
-							<span className="text-sm font-medium text-gray-600">Not Checked</span>
-						</div>
-						<div className="text-2xl font-bold text-gray-900">{stats.notCheckedCount}</div>
-					</div>
-				</div>
-			</div>
 
 			{/* Students List */}
 			<div className="bg-white rounded-lg border">
@@ -775,21 +665,6 @@ const TestManagement: React.FC<TestManagementProps> = ({
 													{getStatusIcon(student.testStatus)}
 													{(student.testStatus || 'not_started').replace('_', ' ').toUpperCase()}
 												</span>
-												
-												{/* Interview Status Badge */}
-												{(() => {
-													const interviewStatus = getInterviewStatus(student);
-													const StatusIcon = interviewStatus.icon;
-													return (
-														<span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${interviewStatus.color}`}>
-															<StatusIcon className="h-3 w-3" />
-															{interviewStatus.status === 'interviewing' && 'INTERVIEWING'}
-															{interviewStatus.status === 'completed' && 'INTERVIEW DONE'}
-															{interviewStatus.status === 'in_queue' && 'IN QUEUE'}
-															{interviewStatus.status === 'not_registered' && 'NOT REGISTERED'}
-														</span>
-													);
-												})()}
 											</div>
 										</div>
 
@@ -821,54 +696,25 @@ const TestManagement: React.FC<TestManagementProps> = ({
 
 											{/* Action Buttons */}
 											<div className="flex flex-col gap-2">
-												{userRole === 'test_manager' && (
-													// Presence Controls - Always visible for test manager
+												{userRole === 'test_manager' && (student.presenceStatus === 'not_checked' || !student.presenceStatus) && (
+													// Simplified Presence Controls
 													<div className="flex gap-1">
-														<div className="text-xs text-gray-500 mb-1 w-full">Presence:</div>
-														{student.presenceStatus === 'not_checked' || !student.presenceStatus ? (
-															<>
-																<button
-																	onClick={() => markPresent(student)}
-																	className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-																	title="Mark as Present"
-																>
-																	<UserCheck className="h-3 w-3" />
-																	Present
-																</button>
-																<button
-																	onClick={() => markLate(student)}
-																	className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700"
-																	title="Mark as Late"
-																>
-																	<UserMinus className="h-3 w-3" />
-																	Late
-																</button>
-																<button
-																	onClick={() => markAbsentPresence(student)}
-																	className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-																	title="Mark as Absent"
-																>
-																	<UserX className="h-3 w-3" />
-																	Absent
-																</button>
-															</>
-														) : (
-															<>
-																<button
-																	onClick={() => resetPresence(student)}
-																	className="inline-flex items-center gap-1 px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
-																	title="Reset Presence Status"
-																>
-																	<RotateCcw className="h-3 w-3" />
-																	Reset
-																</button>
-																{student.presenceCheckedAt && (
-																	<div className="text-xs text-gray-500">
-																		Checked: {formatTime(new Date(student.presenceCheckedAt))}
-																	</div>
-																)}
-															</>
-														)}
+														<button
+															onClick={() => markPresent(student)}
+															className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+															title="Mark as Present"
+														>
+															<UserCheck className="h-3 w-3" />
+															Present
+														</button>
+														<button
+															onClick={() => markAbsentPresence(student)}
+															className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+															title="Mark as Absent"
+														>
+															<UserX className="h-3 w-3" />
+															Absent
+														</button>
 													</div>
 												)}
 
@@ -877,22 +723,13 @@ const TestManagement: React.FC<TestManagementProps> = ({
 														// Test Manager - Test Management Controls
 														<>
 														{student.testStatus === 'not_started' && (
-															<>
-																<button
-																	onClick={() => startTest(student)}
-																	className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
-																>
-																	<Play className="h-4 w-4" />
-																	Start Test
-																</button>
-																<button
-																	onClick={() => markAbsent(student)}
-																	className="inline-flex items-center gap-1 px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
-																>
-																	<AlertCircle className="h-4 w-4" />
-																	Mark Absent
-																</button>
-															</>
+															<button
+																onClick={() => startTest(student)}
+																className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+															>
+																<Play className="h-4 w-4" />
+																Start Test
+															</button>
 														)}
 
 														{student.testStatus === 'in_progress' && (
