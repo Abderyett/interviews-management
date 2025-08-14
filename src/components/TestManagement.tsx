@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Clock, Play, RotateCcw, Timer, CheckCircle, Users, UserCheck, Search, UserX, Calendar, ChevronLeft, ChevronRight, AlertCircle, User } from 'lucide-react';
+import { Clock, Play, RotateCcw, Timer, CheckCircle, Users, UserCheck, Search, UserX, Calendar, ChevronLeft, ChevronRight, AlertCircle, User, UserMinus } from 'lucide-react';
 
 // AdmissionStudent interface - this should match the one in InterviewManagement.tsx
 interface AdmissionStudent {
@@ -265,15 +265,6 @@ const TestManagement: React.FC<TestManagementProps> = ({
 		await onUpdateStudent(updatedStudent);
 	}, [onUpdateStudent]);
 
-	// Mark student as absent
-	const markAbsent = useCallback(async (student: AdmissionStudent) => {
-		if (!student.id) return;
-		const updatedStudent = {
-			...student,
-			testStatus: 'absent' as const
-		};
-		await onUpdateStudent(updatedStudent);
-	}, [onUpdateStudent]);
 
 	// Adjust start time
 	const adjustStartTime = useCallback(async (student: AdmissionStudent, newStartTime: string) => {
@@ -327,30 +318,7 @@ const TestManagement: React.FC<TestManagementProps> = ({
 		await onUpdateStudent(updatedStudent);
 	}, [onUpdateStudent, userRole]);
 
-	// Mark student as late but present
-	const markLate = useCallback(async (student: AdmissionStudent) => {
-		if (!student.id) return;
-		const now = new Date().toISOString();
-		const updatedStudent = {
-			...student,
-			presenceStatus: 'late' as const,
-			presenceCheckedAt: now,
-			presenceCheckedBy: userRole || 'test_manager'
-		};
-		await onUpdateStudent(updatedStudent);
-	}, [onUpdateStudent, userRole]);
 
-	// Reset presence status
-	const resetPresence = useCallback(async (student: AdmissionStudent) => {
-		if (!student.id) return;
-		const updatedStudent = {
-			...student,
-			presenceStatus: 'not_checked' as const,
-			presenceCheckedAt: undefined,
-			presenceCheckedBy: undefined
-		};
-		await onUpdateStudent(updatedStudent);
-	}, [onUpdateStudent]);
 
 	// Date navigation helpers
 	const formatDate = (dateString: string) => {
