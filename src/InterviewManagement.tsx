@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
 	Users,
 	Clock,
@@ -122,6 +122,10 @@ interface AdmissionStudent {
 	interviewStatus?: 'not_registered' | 'in_queue' | 'interviewing' | 'completed';
 	interviewQueueNumber?: number;
 	interviewCompletedTime?: string;
+	// Presence tracking fields
+	presenceStatus?: 'not_checked' | 'present' | 'absent' | 'late';
+	presenceCheckedAt?: string;
+	presenceCheckedBy?: string;
 	// Helper properties for interview system
 	studentId?: string; // Generated from nom + prenom
 	name?: string; // Full name for display
@@ -586,6 +590,10 @@ const InterviewQueueSystem = () => {
 				interviewStatus: student.interview_status || 'not_registered',
 				interviewQueueNumber: student.interview_queue_number,
 				interviewCompletedTime: student.interview_completed_time,
+				// Presence tracking fields
+				presenceStatus: student.presence_status,
+				presenceCheckedAt: student.presence_checked_at,
+				presenceCheckedBy: student.presence_checked_by,
 				dateCreated: new Date(student.date_created),
 				salesPersonId: student.sales_person_id,
 				studentRegistryId: student.student_registry_id,
@@ -816,6 +824,10 @@ const InterviewQueueSystem = () => {
 					interview_status: updatedStudent.interviewStatus || 'not_registered',
 					interview_queue_number: updatedStudent.interviewQueueNumber,
 					interview_completed_time: updatedStudent.interviewCompletedTime,
+					// Add presence tracking fields
+					presence_status: updatedStudent.presenceStatus,
+					presence_checked_at: updatedStudent.presenceCheckedAt,
+					presence_checked_by: updatedStudent.presenceCheckedBy,
 				})
 				.eq('id', updatedStudent.id);
 
@@ -857,10 +869,15 @@ const InterviewQueueSystem = () => {
 				// Update interview status in admission_students table
 				const admissionStudent = admissionStudents.find((s) => `${s.nom} ${s.prenom}` === student.name);
 				if (admissionStudent) {
+					const now = new Date().toISOString();
 					await updateAdmissionStudent({
 						...admissionStudent,
 						interviewStatus: 'in_queue',
 						interviewQueueNumber: currentData.currentNumber,
+						// Auto-mark as present when checked in by receptionist
+						presenceStatus: 'present' as const,
+						presenceCheckedAt: now,
+						presenceCheckedBy: userRole || 'receptionist'
 					});
 				}
 
@@ -1017,10 +1034,15 @@ const InterviewQueueSystem = () => {
 					(s) => `${s.nom} ${s.prenom}` === professor.currentStudent?.name
 				);
 				if (admissionStudent) {
+					const now = new Date().toISOString();
 					await updateAdmissionStudent({
 						...admissionStudent,
 						interviewStatus: 'completed',
-						interviewCompletedTime: new Date().toISOString(),
+						interviewCompletedTime: now,
+						// Auto-mark as present since they completed the interview
+						presenceStatus: 'present' as const,
+						presenceCheckedAt: now,
+						presenceCheckedBy: 'auto_interview_completion'
 					});
 				}
 
@@ -1515,6 +1537,21 @@ const InterviewQueueSystem = () => {
 
 			console.debug('Successfully removed from queue:', lastQueueEntry.name);
 
+			// Reset presence status in admission_students table
+			const admissionStudent = admissionStudents.find((s) => `${s.nom} ${s.prenom}` === lastQueueEntry.name);
+			if (admissionStudent) {
+				const now = new Date().toISOString();
+				await updateAdmissionStudent({
+					...admissionStudent,
+					interviewStatus: 'not_registered',
+					interviewQueueNumber: undefined,
+					// Reset presence status when undoing queue entry
+					presenceStatus: 'not_checked' as const,
+					presenceCheckedAt: now,
+					presenceCheckedBy: userRole || 'system_undo'
+				});
+			}
+
 			// Update local state - remove from queue
 			setDateData((prev) => ({
 				...prev,
@@ -1612,6 +1649,21 @@ const InterviewQueueSystem = () => {
 				if (error) throw error;
 
 				console.debug('Successfully removed from queue:', queueEntry.name);
+
+				// Reset presence status in admission_students table
+				const admissionStudent = admissionStudents.find((s) => `${s.nom} ${s.prenom}` === queueEntry.name);
+				if (admissionStudent) {
+					const now = new Date().toISOString();
+					await updateAdmissionStudent({
+						...admissionStudent,
+						interviewStatus: 'not_registered',
+						interviewQueueNumber: undefined,
+						// Reset presence status when removed from queue (was added by mistake)
+						presenceStatus: 'not_checked' as const,
+						presenceCheckedAt: now,
+						presenceCheckedBy: userRole || 'system_removal'
+					});
+				}
 
 				// Update local state - remove from queue
 				setDateData((prev) => ({
@@ -1866,6 +1918,21 @@ const InterviewQueueSystem = () => {
 				}
 
 				console.debug('Successfully deleted student:', student.name);
+
+				// Reset presence status in admission_students table
+				const admissionStudent = admissionStudents.find((s) => `${s.nom} ${s.prenom}` === student.name);
+				if (admissionStudent) {
+					const now = new Date().toISOString();
+					await updateAdmissionStudent({
+						...admissionStudent,
+						interviewStatus: 'not_registered',
+						interviewQueueNumber: undefined,
+						// Reset presence status when completely deleting student
+						presenceStatus: 'not_checked' as const,
+						presenceCheckedAt: now,
+						presenceCheckedBy: userRole || 'system_deletion'
+					});
+				}
 
 				// Update local state
 				setDateData((prev) => ({
