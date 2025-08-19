@@ -15,6 +15,7 @@ import {
 	GripVertical,
 	Timer,
 	Bell,
+	UserCheck,
 } from 'lucide-react';
 
 import {
@@ -39,6 +40,7 @@ import { StudentAdmissionForm } from './components/StudentAdmissionForm';
 import { ProfessorInterviewForm } from './components/ProfessorInterviewForm';
 import { AdministrationView } from './components/AdministrationView';
 import TestManagement from './components/TestManagement';
+import SalesStudentManagement from './components/SalesStudentManagement';
 
 // Types
 interface Student {
@@ -3076,18 +3078,32 @@ const InterviewQueueSystem = () => {
 											</Button>
 										)}
 										{userRole === 'sales' && (
-											<Button
-												onClick={() => setCurrentView('sales')}
-												variant={currentView === 'sales' ? 'default' : 'outline'}
-												size='sm'
-												className={
-													currentView === 'sales'
-														? 'bg-green-600 hover:bg-green-700 text-white transition-colors duration-200'
-														: 'border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400 transition-all duration-200'
-												}>
-												<Users className='h-4 w-4 mr-2' />
-												Admissions
-											</Button>
+											<>
+												<Button
+													onClick={() => setCurrentView('sales')}
+													variant={currentView === 'sales' ? 'default' : 'outline'}
+													size='sm'
+													className={
+														currentView === 'sales'
+															? 'bg-green-600 hover:bg-green-700 text-white transition-colors duration-200'
+															: 'border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400 transition-all duration-200'
+													}>
+													<Users className='h-4 w-4 mr-2' />
+													Admissions
+												</Button>
+												<Button
+													onClick={() => setCurrentView('my-students')}
+													variant={currentView === 'my-students' ? 'default' : 'outline'}
+													size='sm'
+													className={
+														currentView === 'my-students'
+															? 'bg-green-600 hover:bg-green-700 text-white transition-colors duration-200'
+															: 'border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400 transition-all duration-200'
+													}>
+													<UserCheck className='h-4 w-4 mr-2' />
+													My Students
+												</Button>
+											</>
 										)}
 										{userRole === 'superadmin' && (
 											<Button
@@ -3154,6 +3170,13 @@ const InterviewQueueSystem = () => {
 								onUpdateStudent={updateAdmissionStudent}
 								onDeleteStudent={deleteAdmissionStudent}
 								onAddToRegistry={addAdmissionToRegistry}
+							/>
+						)}
+						{currentView === 'my-students' && userRole === 'sales' && (
+							<SalesStudentManagement
+								students={admissionStudents}
+								salesPersonId={salesId ?? undefined}
+								onUpdateStudent={updateAdmissionStudent}
 							/>
 						)}
 						{currentView === 'administration' && <AdministrationView students={admissionStudents} />}
