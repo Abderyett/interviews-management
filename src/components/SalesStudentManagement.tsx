@@ -59,13 +59,11 @@ interface AdmissionStudent {
 interface SalesStudentManagementProps {
 	students: AdmissionStudent[];
 	salesPersonId?: number;
-	onUpdateStudent: (student: AdmissionStudent) => Promise<void>;
 }
 
 export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 	students,
-	salesPersonId,
-	onUpdateStudent
+	salesPersonId
 }) => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [selectedSpeciality, setSelectedSpeciality] = useState('');

@@ -3176,7 +3176,6 @@ const InterviewQueueSystem = () => {
 							<SalesStudentManagement
 								students={admissionStudents}
 								salesPersonId={salesId ?? undefined}
-								onUpdateStudent={updateAdmissionStudent}
 							/>
 						)}
 						{currentView === 'administration' && <AdministrationView students={admissionStudents} />}
