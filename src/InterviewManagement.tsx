@@ -830,6 +830,8 @@ const InterviewQueueSystem = () => {
 					presence_status: updatedStudent.presenceStatus,
 					presence_checked_at: updatedStudent.presenceCheckedAt,
 					presence_checked_by: updatedStudent.presenceCheckedBy,
+					// Add sales person assignment field
+					sales_person_id: updatedStudent.salesPersonId,
 				})
 				.eq('id', updatedStudent.id);
 
