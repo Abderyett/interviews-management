@@ -99,12 +99,10 @@ const TestManagement: React.FC<TestManagementProps> = ({
 	students,
 	onUpdateStudent,
 	selectedDate,
-	interviewData, // Keep for future interview integration
+	interviewData: _, // Keep for future interview integration
 	userRole,
 	onDateChange
 }) => {
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	const _unused = interviewData; // Acknowledge parameter to avoid TypeScript warning
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [searchTerm, setSearchTerm] = useState('');
 	const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate);
