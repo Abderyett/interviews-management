@@ -1766,11 +1766,13 @@ const InterviewQueueSystem = () => {
 		index,
 		availableProfessors,
 		isReadOnly,
+		canSendToRoom,
 	}: {
 		student: QueueEntry;
 		index: number;
 		availableProfessors: Professor[];
 		isReadOnly: boolean;
+		canSendToRoom: boolean;
 	}) => {
 		const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
 			id: `queue-${student.studentId}-${student.queueNumber}`,
@@ -1831,10 +1833,14 @@ const InterviewQueueSystem = () => {
 								{availableProfessors.map((professor: Professor) => (
 									<Button
 										key={professor.id}
-										onClick={isReadOnly ? undefined : () => sendStudentToRoom(student, professor.id)}
+										onClick={canSendToRoom ? () => sendStudentToRoom(student, professor.id) : undefined}
 										size='sm'
-										disabled={isLoading}
-										className='bg-green-600 hover:bg-green-700 text-white transition-colors duration-200'>
+										disabled={isLoading || !canSendToRoom}
+										className={`transition-colors duration-200 ${
+											canSendToRoom 
+												? 'bg-green-600 hover:bg-green-700 text-white' 
+												: 'bg-gray-400 text-gray-600 cursor-not-allowed'
+										}`}>
 										Send to {professor.room}
 									</Button>
 								))}
@@ -2224,6 +2230,9 @@ const InterviewQueueSystem = () => {
 		const isReadOnly = userRole
 			? readOnlyRoles.includes(userRole as 'professor' | 'sales' | 'test_manager')
 			: false;
+		
+		// Only superadmin and receptionist can send students to rooms
+		const canSendToRoom = userRole === 'superadmin' || userRole === 'receptionist';
 
 		return (
 			<div className='space-y-6'>
@@ -2397,6 +2406,7 @@ const InterviewQueueSystem = () => {
 														index={index}
 														availableProfessors={availableProfessors}
 														isReadOnly={isReadOnly}
+														canSendToRoom={canSendToRoom}
 													/>
 												))}
 											</div>

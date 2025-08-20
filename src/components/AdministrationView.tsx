@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Users, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Search, Users, CheckCircle, XCircle, Clock, Edit } from 'lucide-react';
 
 interface Student {
 	id?: number;
@@ -233,6 +233,7 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({ students
 					<table className="w-full border-collapse min-w-max">
 						<thead>
 							<tr className="border-b bg-gray-50">
+								<th className="text-left p-4 font-medium text-gray-900">Actions</th>
 								<th className="text-left p-4 font-medium text-gray-900">Student</th>
 								<th className="text-left p-4 font-medium text-gray-900">Contact</th>
 								<th className="text-left p-4 font-medium text-gray-900">Academic Info</th>
@@ -244,7 +245,7 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({ students
 						<tbody>
 							{filteredStudents.length === 0 ? (
 								<tr>
-									<td colSpan={6} className="text-center p-8 text-gray-500">
+									<td colSpan={7} className="text-center p-8 text-gray-500">
 										{searchQuery || validationFilter !== 'all' 
 											? 'No students match your search criteria'
 											: 'No students available'
@@ -254,6 +255,19 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({ students
 							) : (
 								filteredStudents.map((student, index) => (
 									<tr key={student.id || index} className="border-b hover:bg-gray-50">
+										{/* Actions Column - First */}
+										<td className="p-4">
+											<div className="flex justify-center">
+												<button
+													onClick={() => {
+														alert(`Edit functionality for ${student.nom} ${student.prenom} - This would require proper permissions`);
+													}}
+													className="p-2 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-500 hover:text-indigo-700 rounded-md transition-colors cursor-pointer"
+													title="Edit student (Requires permission)">
+													<Edit className="h-3 w-3" />
+												</button>
+											</div>
+										</td>
 										{/* Student Name & Specialité */}
 										<td className="p-4">
 											<div>

@@ -283,6 +283,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		validationComment: '',
 		studentStatus: 'en_cours',
 		interviewDate: '',
+		salesPersonId: undefined,
 	});
 
 	const [showDropdowns, setShowDropdowns] = useState({
@@ -437,6 +438,10 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 					...editingStudent,
 					...(formData as AdmissionStudent),
 					testRequired,
+					// For superadmin, use the selected salesPersonId; otherwise keep original
+					salesPersonId: userRole === 'superadmin' && formData.salesPersonId 
+						? formData.salesPersonId 
+						: editingStudent.salesPersonId,
 				};
 				await onUpdateStudent(updatedStudent);
 			} else if (modalMode === 'test' && editingStudent && onUpdateStudent) {
@@ -465,7 +470,9 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 					validationComment: formData.validationComment || '',
 					studentStatus: formData.studentStatus || 'en_cours',
 					dateCreated: new Date(),
-					salesPersonId: salesPersonId || 0,
+					salesPersonId: userRole === 'superadmin' && formData.salesPersonId 
+						? formData.salesPersonId 
+						: (salesPersonId || 0),
 					interviewDate: formData.interviewDate,
 				};
 
@@ -501,6 +508,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 			validation: 'pending',
 			validationComment: '',
 			interviewDate: '',
+			salesPersonId: undefined,
 		});
 		setShowForm(false);
 		setEditingStudent(null);
@@ -1094,6 +1102,46 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 												</div>
 											)}
 
+											{/* Sales Person Assignment - Only for SuperAdmin */}
+											{userRole === 'superadmin' && (
+												<div className='relative'>
+													<label className='block text-sm font-medium mb-2'>Sales Person Assignment</label>
+													<button
+														type='button'
+														onClick={() =>
+															setShowDropdowns((prev) => ({ ...prev, salesPerson: !prev.salesPerson }))
+														}
+														className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
+														<span className={formData.salesPersonId ? 'text-foreground' : 'text-muted-foreground'}>
+															{formData.salesPersonId
+																? getSalesPersonName(formData.salesPersonId)
+																: 'Select Sales Person'}
+														</span>
+														<ChevronDown className='h-4 w-4' />
+													</button>
+
+													{showDropdowns.salesPerson && (
+														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+															{Object.entries(SALES_PERSONS).map(([id, name]) => (
+																<button
+																	key={id}
+																	type='button'
+																	onClick={() => {
+																		setFormData((prev) => ({ ...prev, salesPersonId: parseInt(id) }));
+																		setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
+																	}}
+																	className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
+																	{name}
+																</button>
+															))}
+														</div>
+													)}
+													<p className='text-xs text-gray-500 mt-1'>
+														Change the sales person responsible for this student. This is useful when a student was created under the wrong sales person.
+													</p>
+												</div>
+											)}
+
 											{/* Validation - Only for SuperAdmin */}
 											{userRole === 'superadmin' && (
 												<div className='relative'>
@@ -1308,6 +1356,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 									<table className='w-full border-collapse min-w-max'>
 										<thead>
 											<tr className='border-b'>
+												<th className='text-left p-3 min-w-[100px]'>Actions</th>
 												<th className='text-left p-3 min-w-[150px]'>Name</th>
 												<th className='text-left p-3 min-w-[120px]'>Mobile</th>
 												<th className='text-left p-3 min-w-[100px]'>Bac</th>
@@ -1323,17 +1372,70 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 												<th className='text-left p-3 min-w-[120px]'>Interview Date</th>
 												<th className='text-left p-3 min-w-[100px]'>Created</th>
 												<th className='text-left p-3 min-w-[120px]'>Sales Person</th>
-												<th className='text-left p-3 min-w-[100px]'>Actions</th>
 											</tr>
 										</thead>
 										<tbody>
 											{filteredStudents.map((student, index) => (
 												<tr key={index} className='border-b hover:bg-gray-50'>
+													{/* Actions Column - First */}
 													<td className='p-3'>
-														<div>
-															<div className='font-medium'>
-																{student.nom} {student.prenom}
-															</div>
+														<div className='flex gap-1 justify-center'>
+															{/* Edit Button with Indigo Color */}
+															{(userRole === 'sales' && student.salesPersonId === salesPersonId) ||
+															userRole === 'superadmin' ? (
+																<Button
+																	onClick={() => handleEdit(student)}
+																	size='sm'
+																	variant='outline'
+																	className='p-2 border-indigo-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-500 hover:text-indigo-700 transition-colors cursor-pointer'
+																	title='Edit student'>
+																	<Edit2 className='h-3 w-3' />
+																</Button>
+															) : null}
+															
+															{/* Test Results Button - Only show if test required and no results yet */}
+															{student.testRequired &&
+																(!student.testScores || Object.keys(student.testScores).length === 0) && (
+																	<Button
+																		onClick={() => handleAddTestResults(student)}
+																		size='sm'
+																		variant='outline'
+																		className='p-2 bg-yellow-50 hover:bg-yellow-100'
+																		title='Add test results'>
+																		<FileText className='h-3 w-3' />
+																	</Button>
+																)}
+
+															{/* Interview Feedback Button - Only for SuperAdmin */}
+															{userRole === 'superadmin' && (
+																<Button
+																	onClick={() => handleViewEvaluation(student)}
+																	size='sm'
+																	variant='outline'
+																	disabled={loadingEvaluation}
+																	className='p-2 bg-blue-50 hover:bg-blue-100'
+																	title='View interview evaluation'>
+																	<Eye className='h-3 w-3' />
+																</Button>
+															)}
+
+															{/* Delete Button - Only for SuperAdmin */}
+															{userRole === 'superadmin' ? (
+																<Button
+																	onClick={() => handleDeleteClick(student)}
+																	size='sm'
+																	variant='outline'
+																	className='p-2 text-red-600 hover:text-red-700 hover:bg-red-50'
+																	title='Delete student'>
+																	<Trash2 className='h-3 w-3' />
+																</Button>
+															) : null}
+														</div>
+													</td>
+													{/* Name Column - Second */}
+													<td className='p-3'>
+														<div className='font-medium'>
+															{student.nom} {student.prenom}
 														</div>
 													</td>
 													<td className='p-3'>{student.mobile}</td>
@@ -1457,57 +1559,6 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 													</td>
 													<td className='p-3 text-sm text-muted-foreground'>
 														{getSalesPersonName(student.salesPersonId)}
-													</td>
-													<td className='p-3'>
-														<div className='flex gap-2'>
-															{/* Edit Button */}
-															{(userRole === 'sales' && student.salesPersonId === salesPersonId) ||
-															userRole === 'superadmin' ? (
-																<Button
-																	onClick={() => handleEdit(student)}
-																	size='sm'
-																	variant='outline'
-																	className='p-2'>
-																	<Edit2 className='h-3 w-3' />
-																</Button>
-															) : null}
-
-															{/* Test Results Button - Only show if test required and no results yet */}
-															{student.testRequired &&
-																(!student.testScores || Object.keys(student.testScores).length === 0) && (
-																	<Button
-																		onClick={() => handleAddTestResults(student)}
-																		size='sm'
-																		variant='outline'
-																		className='p-2 bg-yellow-50 hover:bg-yellow-100'>
-																		<FileText className='h-3 w-3' />
-																	</Button>
-																)}
-
-															{/* Interview Feedback Button - Only for SuperAdmin */}
-															{userRole === 'superadmin' && (
-																<Button
-																	onClick={() => handleViewEvaluation(student)}
-																	size='sm'
-																	variant='outline'
-																	disabled={loadingEvaluation}
-																	className='p-2 bg-blue-50 hover:bg-blue-100'
-																	title='Voir evaluation entretien'>
-																	<Eye className='h-3 w-3' />
-																</Button>
-															)}
-
-															{/* Delete Button - Only for SuperAdmin */}
-															{userRole === 'superadmin' ? (
-																<Button
-																	onClick={() => handleDeleteClick(student)}
-																	size='sm'
-																	variant='outline'
-																	className='p-2 text-red-600 hover:text-red-700 hover:bg-red-50'>
-																	<Trash2 className='h-3 w-3' />
-																</Button>
-															) : null}
-														</div>
 													</td>
 												</tr>
 											))}

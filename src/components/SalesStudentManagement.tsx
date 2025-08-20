@@ -11,7 +11,8 @@ import {
 	User,
 	FileText,
 	Filter,
-	X
+	X,
+	Edit
 } from 'lucide-react';
 
 interface AdmissionStudent {
@@ -59,11 +60,13 @@ interface AdmissionStudent {
 interface SalesStudentManagementProps {
 	students: AdmissionStudent[];
 	salesPersonId?: number;
+	onUpdateStudent?: (student: AdmissionStudent) => void;
 }
 
 export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 	students,
-	salesPersonId
+	salesPersonId,
+	onUpdateStudent
 }) => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [selectedSpeciality, setSelectedSpeciality] = useState('');
@@ -379,6 +382,29 @@ export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 					<div className="divide-y">
 						{filteredStudents.map((student) => (
 							<div key={student.id} className="p-4">
+								{/* Actions Bar - First */}
+								<div className="flex justify-end mb-3">
+									{onUpdateStudent ? (
+										<button
+											onClick={() => {
+												// For now, this will redirect to the main admission form
+												// In a real implementation, this could open a modal or navigate to edit page
+												alert(`Edit functionality would open form for ${student.nom} ${student.prenom}. Please use the main Admission section to edit student details.`);
+											}}
+											className="p-2 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-500 hover:text-indigo-700 rounded-md transition-colors cursor-pointer"
+											title="Edit student">
+											<Edit className="h-4 w-4" />
+										</button>
+									) : (
+										<button
+											disabled
+											className="p-2 border border-gray-200 text-gray-300 rounded-md cursor-not-allowed"
+											title="Edit not available">
+											<Edit className="h-4 w-4" />
+										</button>
+									)}
+								</div>
+								
 								<div className="flex items-start justify-between">
 									{/* Student Info */}
 									<div className="flex items-start gap-4 flex-1">
