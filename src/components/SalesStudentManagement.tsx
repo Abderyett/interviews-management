@@ -14,6 +14,13 @@ import {
 	X,
 	Edit
 } from 'lucide-react';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from './ui/select';
 
 interface AdmissionStudent {
 	id?: number;
@@ -69,9 +76,9 @@ export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 	onUpdateStudent
 }) => {
 	const [searchTerm, setSearchTerm] = useState('');
-	const [selectedSpeciality, setSelectedSpeciality] = useState('');
-	const [selectedValidationStatus, setSelectedValidationStatus] = useState('');
-	const [selectedStudentStatus, setSelectedStudentStatus] = useState('');
+	const [selectedSpeciality, setSelectedSpeciality] = useState('all');
+	const [selectedValidationStatus, setSelectedValidationStatus] = useState('all');
+	const [selectedStudentStatus, setSelectedStudentStatus] = useState('all');
 	const [showFilters, setShowFilters] = useState(false);
 
 	// Filter students by salesPersonId
@@ -103,17 +110,17 @@ export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 		}
 
 		// Speciality filter
-		if (selectedSpeciality) {
+		if (selectedSpeciality && selectedSpeciality !== 'all') {
 			filtered = filtered.filter(student => student.specialite === selectedSpeciality);
 		}
 
 		// Validation status filter
-		if (selectedValidationStatus) {
+		if (selectedValidationStatus && selectedValidationStatus !== 'all') {
 			filtered = filtered.filter(student => student.validation === selectedValidationStatus);
 		}
 
 		// Student status filter
-		if (selectedStudentStatus) {
+		if (selectedStudentStatus && selectedStudentStatus !== 'all') {
 			filtered = filtered.filter(student => student.studentStatus === selectedStudentStatus);
 		}
 
@@ -184,9 +191,9 @@ export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 
 	const clearFilters = () => {
 		setSearchTerm('');
-		setSelectedSpeciality('');
-		setSelectedValidationStatus('');
-		setSelectedStudentStatus('');
+		setSelectedSpeciality('all');
+		setSelectedValidationStatus('all');
+		setSelectedStudentStatus('all');
 	};
 
 	return (
@@ -292,44 +299,56 @@ export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-2">Speciality</label>
-							<select
+							<Select
 								value={selectedSpeciality}
-								onChange={(e) => setSelectedSpeciality(e.target.value)}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+								onValueChange={(value) => setSelectedSpeciality(value)}
 							>
-								<option value="">All Specialities</option>
-								{specialities.map(speciality => (
-									<option key={speciality} value={speciality}>{speciality}</option>
-								))}
-							</select>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="All Specialities" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Specialities</SelectItem>
+									{specialities.map(speciality => (
+										<SelectItem key={speciality} value={speciality}>{speciality}</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-2">Validation Status</label>
-							<select
+							<Select
 								value={selectedValidationStatus}
-								onChange={(e) => setSelectedValidationStatus(e.target.value)}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+								onValueChange={(value) => setSelectedValidationStatus(value)}
 							>
-								<option value="">All Validation Status</option>
-								<option value="pending">Pending</option>
-								<option value="accepted">Accepted</option>
-								<option value="rejected">Rejected</option>
-							</select>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="All Validation Status" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Validation Status</SelectItem>
+									<SelectItem value="pending">Pending</SelectItem>
+									<SelectItem value="accepted">Accepted</SelectItem>
+									<SelectItem value="rejected">Rejected</SelectItem>
+								</SelectContent>
+							</Select>
 						</div>
 
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-2">Student Status</label>
-							<select
+							<Select
 								value={selectedStudentStatus}
-								onChange={(e) => setSelectedStudentStatus(e.target.value)}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+								onValueChange={(value) => setSelectedStudentStatus(value)}
 							>
-								<option value="">All Student Status</option>
-								<option value="en_cours">En Cours</option>
-								<option value="inscrit">Inscrit</option>
-								<option value="abandonner">Abandonner</option>
-							</select>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="All Student Status" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Student Status</SelectItem>
+									<SelectItem value="en_cours">En Cours</SelectItem>
+									<SelectItem value="inscrit">Inscrit</SelectItem>
+									<SelectItem value="abandonner">Abandonner</SelectItem>
+								</SelectContent>
+							</Select>
 						</div>
 
 						<div className="md:col-span-3 flex justify-end">
@@ -349,7 +368,7 @@ export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 					<span>
 						Showing {filteredStudents.length} of {myStudents.length} students
 					</span>
-					{(searchTerm || selectedSpeciality || selectedValidationStatus || selectedStudentStatus) && (
+					{(searchTerm || (selectedSpeciality && selectedSpeciality !== 'all') || (selectedValidationStatus && selectedValidationStatus !== 'all') || (selectedStudentStatus && selectedStudentStatus !== 'all')) && (
 						<span className="text-green-600">Filters active</span>
 					)}
 				</div>
@@ -364,7 +383,7 @@ export const SalesStudentManagement: React.FC<SalesStudentManagementProps> = ({
 				{filteredStudents.length === 0 ? (
 					<div className="p-8 text-center text-gray-500">
 						<Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-						{searchTerm || selectedSpeciality || selectedValidationStatus || selectedStudentStatus ? (
+						{searchTerm || (selectedSpeciality && selectedSpeciality !== 'all') || (selectedValidationStatus && selectedValidationStatus !== 'all') || (selectedStudentStatus && selectedStudentStatus !== 'all') ? (
 							<div>
 								<p>No students found matching your criteria</p>
 								<button

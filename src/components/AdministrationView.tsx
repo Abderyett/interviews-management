@@ -1,5 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Users, CheckCircle, XCircle, Clock, Edit } from 'lucide-react';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from './ui/select';
 
 interface Student {
 	id?: number;
@@ -209,15 +216,25 @@ export const AdministrationView: React.FC<AdministrationViewProps> = ({ students
 
 					{/* Validation Filter */}
 					<div>
-						<select
+						<Select
 							value={validationFilter}
-							onChange={(e) => setValidationFilter(e.target.value as 'all' | 'pending' | 'accepted' | 'rejected')}
-							className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-							<option value="all">All Validations</option>
-							<option value="pending">Pending Only</option>
-							<option value="accepted">Accepted Only</option>
-							<option value="rejected">Rejected Only</option>
-						</select>
+							onValueChange={(value) => setValidationFilter(value as 'all' | 'pending' | 'accepted' | 'rejected')}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue>
+								{validationFilter === 'all' ? 'All Validations' : 
+								 validationFilter === 'pending' ? 'Pending Only' :
+								 validationFilter === 'accepted' ? 'Accepted Only' :
+								 validationFilter === 'rejected' ? 'Rejected Only' : 'All Validations'}
+							</SelectValue>
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Validations</SelectItem>
+								<SelectItem value="pending">Pending Only</SelectItem>
+								<SelectItem value="accepted">Accepted Only</SelectItem>
+								<SelectItem value="rejected">Rejected Only</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 				</div>
 

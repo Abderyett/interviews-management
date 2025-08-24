@@ -9,10 +9,16 @@ import {
 	ChevronRight,
 	Save,
 	X,
-	ChevronDown,
 	Cloud,
 	CloudOff,
 } from 'lucide-react';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from './ui/select';
 
 interface Student {
 	id?: number;
@@ -181,7 +187,6 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 	isVisible,
 }) => {
 	const [currentStep, setCurrentStep] = useState(0);
-	const [showDropdown, setShowDropdown] = useState({ jury: false, decision: false });
 
 	const [formData, setFormData] = useState<Partial<InterviewEvaluation>>({
 		studentId: student.id || 0,
@@ -554,69 +559,41 @@ export const ProfessorInterviewForm: React.FC<ProfessorInterviewFormProps> = ({
 						{/* Decision Dropdown */}
 						<div>
 							<label className='block text-lg font-medium text-gray-900 mb-4'>Decision jury (optionnel)</label>
-							<div className='relative'>
-								<button
-									type='button'
-									onClick={() => setShowDropdown((prev) => ({ ...prev, decision: !prev.decision }))}
-									className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between text-left'>
-									<span className={formData.decisionJury ? 'text-foreground' : 'text-muted-foreground'}>
-										{formData.decisionJury
-											? DECISION_OPTIONS.find((d) => d.value === formData.decisionJury)?.label
-											: 'Selectionner une decision'}
-									</span>
-									<ChevronDown className='h-4 w-4' />
-								</button>
-
-								{showDropdown.decision && (
-									<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
-										{DECISION_OPTIONS.map((option) => (
-											<button
-												key={option.value}
-												type='button'
-												onClick={() => {
-													setFormData((prev) => ({ ...prev, decisionJury: option.value as 'admis' | 'non_admis' | 'indecis' }));
-													setShowDropdown((prev) => ({ ...prev, decision: false }));
-												}}
-												className={`w-full px-4 py-3 text-left hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg ${option.color}`}>
-												{option.label}
-											</button>
-										))}
-									</div>
-								)}
-							</div>
+							<Select
+								value={formData.decisionJury || ''}
+								onValueChange={(value) => setFormData((prev) => ({ ...prev, decisionJury: value as 'admis' | 'non_admis' | 'indecis' }))}
+							>
+								<SelectTrigger className='w-full'>
+									<SelectValue placeholder='Selectionner une decision' />
+								</SelectTrigger>
+								<SelectContent>
+									{DECISION_OPTIONS.map((option) => (
+										<SelectItem key={option.value} value={option.value}>
+											{option.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 
 						{/* Jury Member Dropdown */}
 						<div>
 							<label className='block text-lg font-medium text-gray-900 mb-4'>Membre du jury (optionnel)</label>
-							<div className='relative'>
-								<button
-									type='button'
-									onClick={() => setShowDropdown((prev) => ({ ...prev, jury: !prev.jury }))}
-									className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between text-left'>
-									<span className={formData.membreJury ? 'text-foreground' : 'text-muted-foreground'}>
-										{formData.membreJury || 'Selectionner un membre du jury'}
-									</span>
-									<ChevronDown className='h-4 w-4' />
-								</button>
-
-								{showDropdown.jury && (
-									<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
-										{JURY_MEMBERS.map((member) => (
-											<button
-												key={member}
-												type='button'
-												onClick={() => {
-													setFormData((prev) => ({ ...prev, membreJury: member }));
-													setShowDropdown((prev) => ({ ...prev, jury: false }));
-												}}
-												className='w-full px-4 py-3 text-left hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg'>
-												{member}
-											</button>
-										))}
-									</div>
-								)}
-							</div>
+							<Select
+								value={formData.membreJury || ''}
+								onValueChange={(value) => setFormData((prev) => ({ ...prev, membreJury: value }))}
+							>
+								<SelectTrigger className='w-full'>
+									<SelectValue placeholder='Selectionner un membre du jury' />
+								</SelectTrigger>
+								<SelectContent>
+									{JURY_MEMBERS.map((member) => (
+										<SelectItem key={member} value={member}>
+											{member}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 
 						{/* Global Comment */}

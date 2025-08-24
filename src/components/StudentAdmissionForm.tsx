@@ -4,7 +4,6 @@ import {
 	Save,
 	AlertTriangle,
 	Check,
-	ChevronDown,
 	Calendar,
 	Edit2,
 	Trash2,
@@ -16,6 +15,13 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { DataTable, type DataTableColumn } from './ui/data-table';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from './ui/select';
 import { CalendarComponent } from './Calendar';
 import { AdmissionDashboard } from './AdmissionDashboard';
 import { supabase } from '../lib/supabase';
@@ -306,13 +312,6 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		salesPersonId: undefined,
 	});
 
-	const [showDropdowns, setShowDropdowns] = useState({
-		specialite: false,
-		salesPerson: false,
-		testRequired: false,
-		interviewStatus: false,
-		date: false,
-	});
 
 	// Calculate if test is required and average
 	const testRequired = useMemo(() => {
@@ -913,28 +912,6 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		}
 	};
 
-	// Close dropdowns when clicking outside
-	React.useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			const target = event.target as HTMLElement;
-			// Check if click is outside any dropdown container
-			if (!target.closest('[data-dropdown-container]')) {
-				setShowDropdowns((prev) => ({
-					...prev,
-					date: false,
-					specialite: false,
-					salesPerson: false,
-					testRequired: false,
-					interviewStatus: false,
-				}));
-			}
-		};
-
-		document.addEventListener('mousedown', handleClickOutside);
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside);
-		};
-	}, []);
 
 	return (
 		<div className='space-y-6'>
@@ -1024,145 +1001,73 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 								{/* Specialite Filter */}
 								<div>
 									<label className='block text-sm font-medium mb-2'>Specialité</label>
-									<div className='relative'>
-										<button
-											type='button'
-											onClick={() => setShowDropdowns((prev) => ({ ...prev, specialite: !prev.specialite }))}
-											className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-											<span className={filterSpecialite ? 'text-foreground' : 'text-muted-foreground'}>
-												{filterSpecialite || 'All Specialités'}
-											</span>
-											<ChevronDown className='h-4 w-4' />
-										</button>
-
-										{showDropdowns.specialite && (
-											<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
-												<button
-													type='button'
-													onClick={() => {
-														setFilterSpecialite('');
-														setShowDropdowns((prev) => ({ ...prev, specialite: false }));
-													}}
-													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-													All Specialités
-												</button>
-												{SPECIALITES.map((spec) => (
-													<button
-														key={spec.value}
-														type='button'
-														onClick={() => {
-															setFilterSpecialite(spec.value);
-															setShowDropdowns((prev) => ({ ...prev, specialite: false }));
-														}}
-														className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-														{spec.label}
-													</button>
-												))}
-											</div>
-										)}
-									</div>
+									<Select
+										value={filterSpecialite || 'all'}
+										onValueChange={(value) => setFilterSpecialite(value === 'all' ? '' : value)}
+									>
+										<SelectTrigger className='w-full'>
+											<SelectValue>
+												{filterSpecialite ? SPECIALITES.find(spec => spec.value === filterSpecialite)?.label : 'All Specialités'}
+											</SelectValue>
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All Specialités</SelectItem>
+											{SPECIALITES.map((spec) => (
+												<SelectItem key={spec.value} value={spec.value}>
+													{spec.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</div>
 
 								{/* Sales Person Filter - Only show for superadmin */}
 								{userRole === 'superadmin' && (
 									<div>
 										<label className='block text-sm font-medium mb-2'>Sales Person</label>
-										<div className='relative'>
-											<button
-												type='button'
-												onClick={() =>
-													setShowDropdowns((prev) => ({ ...prev, salesPerson: !prev.salesPerson }))
-												}
-												className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-												<span className={filterSalesPerson ? 'text-foreground' : 'text-muted-foreground'}>
-													{filterSalesPerson
-														? getSalesPersonName(parseInt(filterSalesPerson))
-														: 'All Sales Persons'}
-												</span>
-												<ChevronDown className='h-4 w-4' />
-											</button>
-
-											{showDropdowns.salesPerson && (
-												<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
-													<button
-														type='button'
-														onClick={() => {
-															setFilterSalesPerson('');
-															setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
-														}}
-														className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-														All Sales Persons
-													</button>
-													{uniqueSalesPersons.map((sales) => (
-														<button
-															key={sales.value}
-															type='button'
-															onClick={() => {
-																setFilterSalesPerson(sales.value);
-																setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
-															}}
-															className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-															{sales.label}
-														</button>
-													))}
-												</div>
-											)}
-										</div>
+										<Select
+											value={filterSalesPerson || 'all'}
+											onValueChange={(value) => setFilterSalesPerson(value === 'all' ? '' : value)}
+										>
+											<SelectTrigger className='w-full'>
+												<SelectValue>
+													{filterSalesPerson ? getSalesPersonName(parseInt(filterSalesPerson)) : 'All Sales Persons'}
+												</SelectValue>
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="all">All Sales Persons</SelectItem>
+												{uniqueSalesPersons.map((sales) => (
+													<SelectItem key={sales.value} value={sales.value}>
+														{sales.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 									</div>
 								)}
 
 								{/* Test Requirement Filter */}
 								<div>
 									<label className='block text-sm font-medium mb-2'>Test Requirement</label>
-									<div className='relative'>
-										<button
-											type='button'
-											onClick={() =>
-												setShowDropdowns((prev) => ({ ...prev, testRequired: !prev.testRequired }))
-											}
-											className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-											<span className={filterTestRequired ? 'text-foreground' : 'text-muted-foreground'}>
+									<Select
+										value={filterTestRequired || 'all'}
+										onValueChange={(value) => setFilterTestRequired(value === 'all' ? '' : value)}
+									>
+										<SelectTrigger className='w-full'>
+											<SelectValue>
 												{filterTestRequired === 'required'
 													? 'Test Required'
 													: filterTestRequired === 'not_required'
 													? 'No Test Required'
 													: 'All Students'}
-											</span>
-											<ChevronDown className='h-4 w-4' />
-										</button>
-
-										{showDropdowns.testRequired && (
-											<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg'>
-												<button
-													type='button'
-													onClick={() => {
-														setFilterTestRequired('');
-														setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
-													}}
-													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-													All Students
-												</button>
-												<button
-													type='button'
-													onClick={() => {
-														setFilterTestRequired('required');
-														setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
-													}}
-													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-													Test Required
-												</button>
-												<button
-													type='button'
-													onClick={() => {
-														setFilterTestRequired('not_required');
-														setShowDropdowns((prev) => ({ ...prev, testRequired: false }));
-													}}
-													className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-													No Test Required
-												</button>
-											</div>
-										)}
-									</div>
+											</SelectValue>
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All Students</SelectItem>
+											<SelectItem value="required">Test Required</SelectItem>
+											<SelectItem value="not_required">No Test Required</SelectItem>
+										</SelectContent>
+									</Select>
 								</div>
 
 								{/* Interview Status Filter */}
@@ -1267,52 +1172,61 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 											{/* Bac Type */}
 											<div>
 												<label className='block text-sm font-medium mb-2'>Type Bac *</label>
-												<select
+												<Select
 													value={formData.bacType || ''}
-													onChange={(e) => setFormData((prev) => ({ ...prev, bacType: e.target.value }))}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+													onValueChange={(value) => setFormData((prev) => ({ ...prev, bacType: value }))}
 													required>
-													<option value=''>Select Bac Type</option>
-													{BAC_TYPES.map((bac) => (
-														<option key={bac.value} value={bac.value}>
-															{bac.label}
-														</option>
-													))}
-												</select>
+													<SelectTrigger className='w-full'>
+														<SelectValue placeholder='Select Bac Type' />
+													</SelectTrigger>
+													<SelectContent>
+														{BAC_TYPES.map((bac) => (
+															<SelectItem key={bac.value} value={bac.value}>
+																{bac.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 											</div>
 
 											{/* Année Bac */}
 											<div>
 												<label className='block text-sm font-medium mb-2'>Année Bac *</label>
-												<select
+												<Select
 													value={formData.anneeBac || ''}
-													onChange={(e) => setFormData((prev) => ({ ...prev, anneeBac: e.target.value }))}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+													onValueChange={(value) => setFormData((prev) => ({ ...prev, anneeBac: value }))}
 													required>
-													<option value=''>Select Year</option>
-													{ANNEE_BAC.map((annee) => (
-														<option key={annee.value} value={annee.value}>
-															{annee.label}
-														</option>
-													))}
-												</select>
+													<SelectTrigger className='w-full'>
+														<SelectValue placeholder='Select Year' />
+													</SelectTrigger>
+													<SelectContent>
+														{ANNEE_BAC.map((annee) => (
+															<SelectItem key={annee.value} value={annee.value}>
+																{annee.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 											</div>
 
 											{/* Specialité */}
 											<div>
 												<label className='block text-sm font-medium mb-2'>Spécialité *</label>
-												<select
+												<Select
 													value={formData.specialite || ''}
-													onChange={(e) => setFormData((prev) => ({ ...prev, specialite: e.target.value }))}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+													onValueChange={(value) => setFormData((prev) => ({ ...prev, specialite: value }))}
 													required>
-													<option value=''>Select Specialité</option>
-													{SPECIALITES.map((spec) => (
-														<option key={spec.value} value={spec.value}>
-															{spec.label}
-														</option>
-													))}
-												</select>
+													<SelectTrigger className='w-full'>
+														<SelectValue placeholder='Select Specialité' />
+													</SelectTrigger>
+													<SelectContent>
+														{SPECIALITES.map((spec) => (
+															<SelectItem key={spec.value} value={spec.value}>
+																{spec.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 											</div>
 										</div>
 
@@ -1460,19 +1374,22 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 										{userRole === 'superadmin' && (
 											<div>
 												<label className='block text-sm font-medium mb-2'>Sales Person Assignment</label>
-												<select
-													value={formData.salesPersonId || ''}
-													onChange={(e) =>
-														setFormData((prev) => ({ ...prev, salesPersonId: parseInt(e.target.value) }))
-													}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'>
-													<option value=''>Select Sales Person</option>
-													{Object.entries(SALES_PERSONS).map(([id, name]) => (
-														<option key={id} value={id}>
-															{name}
-														</option>
-													))}
-												</select>
+												<Select
+													value={formData.salesPersonId?.toString() || ''}
+													onValueChange={(value) =>
+														setFormData((prev) => ({ ...prev, salesPersonId: parseInt(value) }))
+													}>
+													<SelectTrigger className='w-full'>
+														<SelectValue placeholder='Select Sales Person' />
+													</SelectTrigger>
+													<SelectContent>
+														{Object.entries(SALES_PERSONS).map(([id, name]) => (
+															<SelectItem key={id} value={id}>
+																{name}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 												<p className='text-xs text-gray-500 mt-1'>
 													Change the sales person responsible for this student. This is useful when a student
 													was created under the wrong sales person.
@@ -1484,22 +1401,25 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 										{userRole === 'superadmin' && (
 											<div>
 												<label className='block text-sm font-medium mb-2'>Validation</label>
-												<select
+												<Select
 													value={formData.validation || ''}
-													onChange={(e) =>
+													onValueChange={(value) =>
 														setFormData((prev) => ({
 															...prev,
-															validation: e.target.value as 'pending' | 'accepted' | 'rejected',
+															validation: value as 'pending' | 'accepted' | 'rejected',
 														}))
-													}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'>
-													<option value=''>Select Status</option>
-													{VALIDATION_STATUS.map((status) => (
-														<option key={status.value} value={status.value}>
-															{status.label}
-														</option>
-													))}
-												</select>
+													}>
+													<SelectTrigger className='w-full'>
+														<SelectValue placeholder='Select Status' />
+													</SelectTrigger>
+													<SelectContent>
+														{VALIDATION_STATUS.map((status) => (
+															<SelectItem key={status.value} value={status.value}>
+																{status.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 											</div>
 										)}
 
@@ -1507,23 +1427,26 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 										{(userRole === 'superadmin' || userRole === 'sales') && (
 											<div>
 												<label className='block text-sm font-medium mb-2'>Student Status</label>
-												<select
+												<Select
 													value={formData.studentStatus || ''}
-													onChange={(e) =>
+													onValueChange={(value) =>
 														setFormData((prev) => ({
 															...prev,
-															studentStatus: e.target.value as 'inscrit' | 'en_cours' | 'abandonner',
+															studentStatus: value as 'inscrit' | 'en_cours' | 'abandonner',
 														}))
 													}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 													disabled={userRole !== 'superadmin' && userRole !== 'sales'}>
-													<option value=''>Select Status</option>
-													{STUDENT_STATUS.map((status) => (
-														<option key={status.value} value={status.value}>
-															{status.label}
-														</option>
-													))}
-												</select>
+													<SelectTrigger className='w-full'>
+														<SelectValue placeholder='Select Status' />
+													</SelectTrigger>
+													<SelectContent>
+														{STUDENT_STATUS.map((status) => (
+															<SelectItem key={status.value} value={status.value}>
+																{status.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 											</div>
 										)}
 
