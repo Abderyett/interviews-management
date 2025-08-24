@@ -222,5 +222,3 @@ export function DataTable<TData>({
   )
 }
 
-// Explicit exports
-export type { DataTableColumn }
