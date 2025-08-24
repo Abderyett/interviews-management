@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Lock files (let npm generate fresh ones during deployment)
+package-lock.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
