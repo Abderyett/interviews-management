@@ -47,6 +47,7 @@ interface AdmissionDashboardProps {
 	salesPersons: Array<{ id: number; name: string }>;
 	selectedDate: string;
 	onDateChange: (date: string) => void;
+	completedEvaluations?: Set<string>;
 }
 
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -129,10 +130,26 @@ const StatCard = ({
 	);
 };
 
-export const AdmissionDashboard: React.FC<AdmissionDashboardProps> = ({ students, salesPersons, selectedDate, onDateChange }) => {
+export const AdmissionDashboard: React.FC<AdmissionDashboardProps> = ({ students, salesPersons, selectedDate, onDateChange, completedEvaluations = new Set() }) => {
+	// Memoized function to check if student has completed interview evaluation
+	const hasCompletedInterview = useMemo(() => {
+		return (student: Student) => {
+			// Use the numeric student ID directly from the database
+			if (!student.id) return false;
+			
+			// Check if any professor has evaluated this student (format: studentId-professorId)
+			for (const evaluationKey of completedEvaluations) {
+				if (evaluationKey.startsWith(`${student.id}-`)) {
+					return true;
+				}
+			}
+			return false;
+		};
+	}, [completedEvaluations]);
+
 	// Filter students by selected date (based on interview date)
 	const filteredStudents = useMemo(() => {
-		if (!selectedDate) return students;
+		if (!selectedDate || selectedDate === 'all') return students;
 		return students.filter((student) => {
 			if (!student.interviewDate) return false;
 			return new Date(student.interviewDate).toDateString() === new Date(selectedDate).toDateString();
@@ -140,51 +157,60 @@ export const AdmissionDashboard: React.FC<AdmissionDashboardProps> = ({ students
 	}, [students, selectedDate]);
 
 	const stats = useMemo(() => {
-		const total = filteredStudents.length;
+		// For "All Dates" view, use all students; for specific dates, use filtered students
+		const baseStudents = selectedDate === 'all' ? students : filteredStudents;
+		const total = baseStudents.length;
 
 		// Validation statistics
-		const accepted = filteredStudents.filter(s => s.validation === 'accepted').length;
-		const rejected = filteredStudents.filter(s => s.validation === 'rejected').length;
-		const pending = filteredStudents.filter(s => s.validation === 'pending').length;
+		const accepted = baseStudents.filter(s => s.validation === 'accepted').length;
+		const rejected = baseStudents.filter(s => s.validation === 'rejected').length;
+		const pending = baseStudents.filter(s => s.validation === 'pending').length;
 
-		// Interview statistics
-		const withInterview = filteredStudents.filter(s => s.interviewDate).length;
-		const withoutInterview = total - withInterview;
+		// Interview statistics - Count based on completed evaluations, not just interview dates
+		const scheduledForInterview = baseStudents.filter(s => s.interviewDate).length;
+		const completedInterview = baseStudents.filter(s => hasCompletedInterview(s)).length;
+		const scheduledButNotCompleted = scheduledForInterview - completedInterview;
+		const notScheduled = total - scheduledForInterview;
 
 		// Test statistics
-		const requireTest = filteredStudents.filter(s => s.testRequired).length;
+		const requireTest = baseStudents.filter(s => s.testRequired).length;
 		const noTestRequired = total - requireTest;
 
 		// Student status statistics
-		const inscrit = filteredStudents.filter(s => s.studentStatus === 'inscrit').length;
-		const enCours = filteredStudents.filter(s => s.studentStatus === 'en_cours').length;
-		const abandonner = filteredStudents.filter(s => s.studentStatus === 'abandonner').length;
+		const inscrit = baseStudents.filter(s => s.studentStatus === 'inscrit').length;
+		const enCours = baseStudents.filter(s => s.studentStatus === 'en_cours').length;
+		const abandonner = baseStudents.filter(s => s.studentStatus === 'abandonner').length;
 
 		// Speciality statistics
 		const specialtyStats = {
-			LAC: filteredStudents.filter(s => s.specialite === 'LAC').length,
-			LFC: filteredStudents.filter(s => s.specialite === 'LFC').length,
-			LINFO: filteredStudents.filter(s => s.specialite === 'LINFO').length,
-			MASTER_MM: filteredStudents.filter(s => s.specialite === 'MASTER_MM').length,
-			MASTER_TD: filteredStudents.filter(s => s.specialite === 'MASTER_TD').length,
+			LAC: baseStudents.filter(s => s.specialite === 'LAC').length,
+			LFC: baseStudents.filter(s => s.specialite === 'LFC').length,
+			LINFO: baseStudents.filter(s => s.specialite === 'LINFO').length,
+			MASTER_MM: baseStudents.filter(s => s.specialite === 'MASTER_MM').length,
+			MASTER_TD: baseStudents.filter(s => s.specialite === 'MASTER_TD').length,
 		};
 
 		// Sales person statistics
 		const salesStats = salesPersons.map(sales => ({
 			...sales,
-			count: filteredStudents.filter(s => s.salesPersonId === sales.id).length,
+			count: baseStudents.filter(s => s.salesPersonId === sales.id).length,
 		}));
 
 		return {
 			total,
 			validation: { accepted, rejected, pending },
-			interview: { withInterview, withoutInterview },
+			interview: { 
+				scheduledForInterview, 
+				completedInterview, 
+				scheduledButNotCompleted, 
+				notScheduled 
+			},
 			test: { requireTest, noTestRequired },
 			studentStatus: { inscrit, enCours, abandonner },
 			specialty: specialtyStats,
 			sales: salesStats,
 		};
-	}, [filteredStudents, salesPersons]);
+	}, [students, filteredStudents, salesPersons, selectedDate, completedEvaluations]);
 
 	return (
 		<div className="space-y-6">
@@ -215,12 +241,15 @@ export const AdmissionDashboard: React.FC<AdmissionDashboardProps> = ({ students
 					<div className="flex items-center gap-2">
 						<Calendar className="h-5 w-5 text-purple-600" />
 						<span className="text-purple-800 font-medium">
-							Showing data for: {new Date(selectedDate).toLocaleDateString('en-US', { 
-								weekday: 'long',
-								year: 'numeric', 
-								month: 'long', 
-								day: 'numeric' 
-							})}
+							{selectedDate === 'all' 
+								? 'Showing data for: All Dates (Global Overview)'
+								: `Showing data for: ${new Date(selectedDate).toLocaleDateString('en-US', { 
+									weekday: 'long',
+									year: 'numeric', 
+									month: 'long', 
+									day: 'numeric' 
+								})}`
+							}
 						</span>
 						<span className="ml-2 bg-purple-600 text-white px-2 py-1 rounded-full text-xs">
 							{stats.total} students
@@ -262,11 +291,11 @@ export const AdmissionDashboard: React.FC<AdmissionDashboardProps> = ({ students
 
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 				<StatCard
-					title="Have Interview"
-					value={stats.interview.withInterview}
-					icon={Calendar}
-					color="blue"
-					percentage={(stats.interview.withInterview / stats.total) * 100}
+					title="Completed Interview"
+					value={stats.interview.completedInterview}
+					icon={CheckCircle}
+					color="green"
+					percentage={(stats.interview.completedInterview / stats.total) * 100}
 				/>
 				<StatCard
 					title="Need Test"
@@ -290,6 +319,48 @@ export const AdmissionDashboard: React.FC<AdmissionDashboardProps> = ({ students
 					percentage={(stats.studentStatus.abandonner / stats.total) * 100}
 				/>
 			</div>
+
+			{/* Interview Breakdown */}
+			<Card>
+				<CardHeader>
+					<CardTitle className="flex items-center gap-2">
+						<Calendar className="h-5 w-5 text-blue-600" />
+						Interview Status Breakdown
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+						<div className="text-center">
+							<div className="text-2xl font-bold text-green-600">{stats.interview.completedInterview}</div>
+							<div className="text-sm text-gray-500">Completed</div>
+							<div className="text-xs text-gray-400">
+								{stats.total > 0 ? ((stats.interview.completedInterview / stats.total) * 100).toFixed(1) : 0}%
+							</div>
+						</div>
+						<div className="text-center">
+							<div className="text-2xl font-bold text-orange-600">{stats.interview.scheduledButNotCompleted}</div>
+							<div className="text-sm text-gray-500">Scheduled</div>
+							<div className="text-xs text-gray-400">
+								{stats.total > 0 ? ((stats.interview.scheduledButNotCompleted / stats.total) * 100).toFixed(1) : 0}%
+							</div>
+						</div>
+						<div className="text-center">
+							<div className="text-2xl font-bold text-gray-600">{stats.interview.notScheduled}</div>
+							<div className="text-sm text-gray-500">Not Scheduled</div>
+							<div className="text-xs text-gray-400">
+								{stats.total > 0 ? ((stats.interview.notScheduled / stats.total) * 100).toFixed(1) : 0}%
+							</div>
+						</div>
+						<div className="text-center">
+							<div className="text-2xl font-bold text-blue-600">{stats.interview.scheduledForInterview}</div>
+							<div className="text-sm text-gray-500">Total Scheduled</div>
+							<div className="text-xs text-gray-400">
+								{stats.total > 0 ? ((stats.interview.scheduledForInterview / stats.total) * 100).toFixed(1) : 0}%
+							</div>
+						</div>
+					</div>
+				</CardContent>
+			</Card>
 
 			{/* Detailed Statistics */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

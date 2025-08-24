@@ -485,7 +485,6 @@ const InterviewQueueSystem = () => {
 				setCompletedEvaluations((prev) => {
 					// Merge database evaluations with any locally added ones
 					const merged = new Set([...prev, ...dbEvaluationKeys]);
-					// Merged completed evaluations
 					return merged;
 				});
 			}
@@ -496,6 +495,33 @@ const InterviewQueueSystem = () => {
 			setIsLoading(false);
 		}
 	}, [selectedDate]);
+
+	// Load ALL completed evaluations for dashboard when viewing "All Dates"
+	const loadAllCompletedEvaluations = useCallback(async () => {
+		try {
+			const { data: allEvaluations, error } = await supabase
+				.from('interview_evaluations')
+				.select('student_id, professor_id');
+
+			if (error) throw error;
+
+			if (allEvaluations && allEvaluations.length > 0) {
+				const allEvaluationKeys = new Set(
+					allEvaluations.map((evaluation) => `${evaluation.student_id}-${evaluation.professor_id}`)
+				);
+				setCompletedEvaluations(allEvaluationKeys);
+			} else {
+				setCompletedEvaluations(new Set());
+			}
+		} catch (error) {
+			console.error('Error loading all evaluations:', error);
+		}
+	}, []);
+
+	// Load all evaluations when component mounts for dashboard use
+	useEffect(() => {
+		loadAllCompletedEvaluations();
+	}, [loadAllCompletedEvaluations]);
 
 	// Initialize professor data if not exists
 	const initializeProfessorData = useCallback(async () => {
@@ -3182,6 +3208,7 @@ const InterviewQueueSystem = () => {
 								onUpdateStudent={updateAdmissionStudent}
 								onDeleteStudent={deleteAdmissionStudent}
 								onAddToRegistry={addAdmissionToRegistry}
+								completedEvaluations={completedEvaluations}
 							/>
 						)}
 						{currentView === 'my-students' && userRole === 'sales' && (
