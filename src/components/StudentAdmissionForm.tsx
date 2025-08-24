@@ -47,6 +47,22 @@ interface AdmissionStudent {
 	dateCreated: Date;
 	salesPersonId: number;
 	interviewDate?: string;
+	// Test management fields
+	testStartTime?: string;
+	testEndTime?: string;
+	testStatus?: 'not_started' | 'in_progress' | 'completed' | 'absent';
+	testDuration?: number; // in minutes
+	// Interview management fields
+	interviewStatus?: 'not_registered' | 'in_queue' | 'interviewing' | 'completed';
+	interviewQueueNumber?: number;
+	interviewCompletedTime?: string;
+	// Presence tracking fields
+	presenceStatus?: 'not_checked' | 'present' | 'absent' | 'late';
+	presenceCheckedAt?: string;
+	presenceCheckedBy?: string;
+	// Helper properties for interview system
+	studentId?: string; // Generated from nom + prenom
+	name?: string; // Full name for display
 }
 
 interface InterviewEvaluation {
@@ -266,6 +282,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	const [showDashboard, setShowDashboard] = useState(false);
 	const [selectedEvaluation, setSelectedEvaluation] = useState<InterviewEvaluation | null>(null);
 	const [showEvaluationModal, setShowEvaluationModal] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	const [formData, setFormData] = useState<Partial<AdmissionStudent>>({
 		nom: '',
@@ -290,12 +307,6 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	});
 
 	const [showDropdowns, setShowDropdowns] = useState({
-		bacType: false,
-		anneeBac: false,
-		specialite: false,
-		validation: false,
-		salesPerson: false,
-		studentStatus: false,
 		testRequired: false,
 		interviewStatus: false,
 		date: false,
@@ -730,6 +741,13 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 			setIsSubmitting(true);
 
 			if (modalMode === 'edit' && editingStudent && onUpdateStudent) {
+				// Validate that we have the required ID for update
+				if (!editingStudent.id) {
+					console.error('Cannot update student: missing ID');
+					setError('Cannot update student: missing ID');
+					return;
+				}
+
 				const updatedStudent: AdmissionStudent = {
 					...editingStudent,
 					...(formData as AdmissionStudent),
@@ -740,7 +758,12 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 							? formData.salesPersonId
 							: editingStudent.salesPersonId,
 				};
+
+				// Ensure the ID is preserved for the update operation
+				updatedStudent.id = editingStudent.id;
+
 				await onUpdateStudent(updatedStudent);
+				setError(null); // Clear any previous errors on successful update
 			} else {
 				const newStudent: AdmissionStudent = {
 					nom: formData.nom || '',
@@ -767,11 +790,13 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 				};
 
 				await onSaveStudent(newStudent);
+				setError(null); // Clear any previous errors on successful save
 			}
 
 			resetForm();
 		} catch (error) {
 			console.error('Error submitting form:', error);
+			setError(`Error submitting form: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			// Keep the form open if there's an error
 		} finally {
 			setIsSubmitting(false);
@@ -802,15 +827,39 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setShowForm(false);
 		setEditingStudent(null);
 		setModalMode('add');
+		setError(null);
 	};
 
 	const handleEdit = (student: AdmissionStudent) => {
 		setEditingStudent(student);
-		setFormData({
-			...student,
-		});
+
+		// Ensure all fields are properly set in formData
+		const formDataToSet = {
+			nom: student.nom || '',
+			prenom: student.prenom || '',
+			mobile: student.mobile || '',
+			bacType: student.bacType || '',
+			anneeBac: student.anneeBac || '',
+			specialite: student.specialite || '',
+			moyenneGenerale: student.moyenneGenerale,
+			maths: student.maths,
+			francais: student.francais,
+			physique: student.physique,
+			licenceSpecialite: student.licenceSpecialite || '',
+			university: student.university || '',
+			testRequired: student.testRequired || false,
+			testScores: student.testScores || {},
+			validation: student.validation || 'pending',
+			validationComment: student.validationComment || '',
+			studentStatus: student.studentStatus || 'en_cours',
+			interviewDate: student.interviewDate || '',
+			salesPersonId: student.salesPersonId,
+		};
+
+		setFormData(formDataToSet);
 		setModalMode('edit');
 		setShowForm(true);
+		setError(null);
 	};
 
 	const handleDropdownSelect = (field: string, value: string) => {
@@ -1165,6 +1214,12 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 								<DialogTitle>{modalMode === 'add' ? 'Add New Student' : 'Edit Student'}</DialogTitle>
 							</DialogHeader>
 							<div className='space-y-4'>
+								{error && (
+									<div className='p-3 bg-red-50 border border-red-200 rounded-lg'>
+										<p className='text-red-700 text-sm'>{error}</p>
+									</div>
+								)}
+
 								<form onSubmit={handleSubmit} className='space-y-4'>
 									<>
 										{/* Basic Info */}
@@ -1217,93 +1272,54 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 										{/* Dropdowns */}
 										<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
 											{/* Bac Type */}
-											<div className='relative'>
+											<div>
 												<label className='block text-sm font-medium mb-2'>Type Bac *</label>
-												<button
-													type='button'
-													onClick={() => setShowDropdowns((prev) => ({ ...prev, bacType: !prev.bacType }))}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-													<span className={formData.bacType ? 'text-foreground' : 'text-muted-foreground'}>
-														{formData.bacType
-															? BAC_TYPES.find((b) => b.value === formData.bacType)?.label
-															: 'Select Bac Type'}
-													</span>
-													<ChevronDown className='h-4 w-4' />
-												</button>
-
-												{showDropdowns.bacType && (
-													<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-														{BAC_TYPES.map((bac) => (
-															<button
-																key={bac.value}
-																type='button'
-																onClick={() => handleDropdownSelect('bacType', bac.value)}
-																className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-																{bac.label}
-															</button>
-														))}
-													</div>
-												)}
+												<select
+													value={formData.bacType || ''}
+													onChange={(e) => setFormData((prev) => ({ ...prev, bacType: e.target.value }))}
+													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+													required>
+													<option value=''>Select Bac Type</option>
+													{BAC_TYPES.map((bac) => (
+														<option key={bac.value} value={bac.value}>
+															{bac.label}
+														</option>
+													))}
+												</select>
 											</div>
 
 											{/* Année Bac */}
-											<div className='relative'>
+											<div>
 												<label className='block text-sm font-medium mb-2'>Année Bac *</label>
-												<button
-													type='button'
-													onClick={() => setShowDropdowns((prev) => ({ ...prev, anneeBac: !prev.anneeBac }))}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-													<span className={formData.anneeBac ? 'text-foreground' : 'text-muted-foreground'}>
-														{formData.anneeBac || 'Select Year'}
-													</span>
-													<ChevronDown className='h-4 w-4' />
-												</button>
-
-												{showDropdowns.anneeBac && (
-													<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-														{ANNEE_BAC.map((annee) => (
-															<button
-																key={annee.value}
-																type='button'
-																onClick={() => handleDropdownSelect('anneeBac', annee.value)}
-																className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-																{annee.label}
-															</button>
-														))}
-													</div>
-												)}
+												<select
+													value={formData.anneeBac || ''}
+													onChange={(e) => setFormData((prev) => ({ ...prev, anneeBac: e.target.value }))}
+													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+													required>
+													<option value=''>Select Year</option>
+													{ANNEE_BAC.map((annee) => (
+														<option key={annee.value} value={annee.value}>
+															{annee.label}
+														</option>
+													))}
+												</select>
 											</div>
 
 											{/* Specialité */}
-											<div className='relative'>
+											<div>
 												<label className='block text-sm font-medium mb-2'>Spécialité *</label>
-												<button
-													type='button'
-													onClick={() =>
-														setShowDropdowns((prev) => ({ ...prev, specialite: !prev.specialite }))
-													}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-													<span className={formData.specialite ? 'text-foreground' : 'text-muted-foreground'}>
-														{formData.specialite
-															? SPECIALITES.find((s) => s.value === formData.specialite)?.label
-															: 'Select Specialité'}
-													</span>
-													<ChevronDown className='h-4 w-4' />
-												</button>
-
-												{showDropdowns.specialite && (
-													<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-														{SPECIALITES.map((spec) => (
-															<button
-																key={spec.value}
-																type='button'
-																onClick={() => handleDropdownSelect('specialite', spec.value)}
-																className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-																{spec.label}
-															</button>
-														))}
-													</div>
-												)}
+												<select
+													value={formData.specialite || ''}
+													onChange={(e) => setFormData((prev) => ({ ...prev, specialite: e.target.value }))}
+													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+													required>
+													<option value=''>Select Specialité</option>
+													{SPECIALITES.map((spec) => (
+														<option key={spec.value} value={spec.value}>
+															{spec.label}
+														</option>
+													))}
+												</select>
 											</div>
 										</div>
 
@@ -1334,12 +1350,14 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																min='0'
 																max='20'
 																value={(formData[field as keyof AdmissionStudent] as number) || ''}
-																onChange={(e) =>
+																onChange={(e) => {
+																	const value =
+																		e.target.value === '' ? undefined : parseFloat(e.target.value);
 																	setFormData((prev) => ({
 																		...prev,
-																		[field]: parseFloat(e.target.value),
-																	}))
-																}
+																		[field]: value,
+																	}));
+																}}
 																onWheel={(e) => e.currentTarget.blur()}
 																className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 																required
@@ -1368,12 +1386,12 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 															<input
 																type='text'
 																value={(formData[field as keyof AdmissionStudent] as string) || ''}
-																onChange={(e) =>
+																onChange={(e) => {
 																	setFormData((prev) => ({
 																		...prev,
 																		[field]: e.target.value,
-																	}))
-																}
+																	}));
+																}}
 																className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 																required
 																placeholder={
@@ -1424,15 +1442,18 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 																min='0'
 																max='20'
 																value={formData.testScores?.[field as keyof typeof formData.testScores] || ''}
-																onChange={(e) =>
+																onChange={(e) => {
+																	const value =
+																		e.target.value === '' ? undefined : parseFloat(e.target.value);
+																	console.log(`Updating testScores.${field} to:`, value);
 																	setFormData((prev) => ({
 																		...prev,
 																		testScores: {
 																			...prev.testScores,
-																			[field]: parseFloat(e.target.value),
+																			[field]: value,
 																		},
-																	}))
-																}
+																	}));
+																}}
 																onWheel={(e) => e.currentTarget.blur()}
 																className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 															/>
@@ -1444,39 +1465,21 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 
 										{/* Sales Person Assignment - Only for SuperAdmin */}
 										{userRole === 'superadmin' && (
-											<div className='relative'>
+											<div>
 												<label className='block text-sm font-medium mb-2'>Sales Person Assignment</label>
-												<button
-													type='button'
-													onClick={() =>
-														setShowDropdowns((prev) => ({ ...prev, salesPerson: !prev.salesPerson }))
+												<select
+													value={formData.salesPersonId || ''}
+													onChange={(e) =>
+														setFormData((prev) => ({ ...prev, salesPersonId: parseInt(e.target.value) }))
 													}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-													<span
-														className={formData.salesPersonId ? 'text-foreground' : 'text-muted-foreground'}>
-														{formData.salesPersonId
-															? getSalesPersonName(formData.salesPersonId)
-															: 'Select Sales Person'}
-													</span>
-													<ChevronDown className='h-4 w-4' />
-												</button>
-
-												{showDropdowns.salesPerson && (
-													<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-														{Object.entries(SALES_PERSONS).map(([id, name]) => (
-															<button
-																key={id}
-																type='button'
-																onClick={() => {
-																	setFormData((prev) => ({ ...prev, salesPersonId: parseInt(id) }));
-																	setShowDropdowns((prev) => ({ ...prev, salesPerson: false }));
-																}}
-																className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-																{name}
-															</button>
-														))}
-													</div>
-												)}
+													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'>
+													<option value=''>Select Sales Person</option>
+													{Object.entries(SALES_PERSONS).map(([id, name]) => (
+														<option key={id} value={id}>
+															{name}
+														</option>
+													))}
+												</select>
 												<p className='text-xs text-gray-500 mt-1'>
 													Change the sales person responsible for this student. This is useful when a student
 													was created under the wrong sales person.
@@ -1486,76 +1489,48 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 
 										{/* Validation - Only for SuperAdmin */}
 										{userRole === 'superadmin' && (
-											<div className='relative'>
+											<div>
 												<label className='block text-sm font-medium mb-2'>Validation</label>
-												<button
-													type='button'
-													onClick={() =>
-														setShowDropdowns((prev) => ({ ...prev, validation: !prev.validation }))
+												<select
+													value={formData.validation || ''}
+													onChange={(e) =>
+														setFormData((prev) => ({
+															...prev,
+															validation: e.target.value as 'pending' | 'accepted' | 'rejected',
+														}))
 													}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'>
-													<span className={formData.validation ? 'text-foreground' : 'text-muted-foreground'}>
-														{formData.validation
-															? VALIDATION_STATUS.find((status) => status.value === formData.validation)
-																	?.label || 'Select Status'
-															: 'Select Status'}
-													</span>
-													<ChevronDown className='h-4 w-4' />
-												</button>
-
-												{showDropdowns.validation && (
-													<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-														{VALIDATION_STATUS.map((status) => (
-															<button
-																key={status.value}
-																type='button'
-																onClick={() => handleDropdownSelect('validation', status.value)}
-																className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-																{status.label}
-															</button>
-														))}
-													</div>
-												)}
+													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'>
+													<option value=''>Select Status</option>
+													{VALIDATION_STATUS.map((status) => (
+														<option key={status.value} value={status.value}>
+															{status.label}
+														</option>
+													))}
+												</select>
 											</div>
 										)}
 
 										{/* Student Status - Visible to all, editable by SuperAdmin and Sales */}
 										{(userRole === 'superadmin' || userRole === 'sales') && (
-											<div className='relative'>
+											<div>
 												<label className='block text-sm font-medium mb-2'>Student Status</label>
-												<button
-													type='button'
-													onClick={() =>
-														setShowDropdowns((prev) => ({ ...prev, studentStatus: !prev.studentStatus }))
+												<select
+													value={formData.studentStatus || ''}
+													onChange={(e) =>
+														setFormData((prev) => ({
+															...prev,
+															studentStatus: e.target.value as 'inscrit' | 'en_cours' | 'abandonner',
+														}))
 													}
-													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 flex items-center justify-between'
+													className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
 													disabled={userRole !== 'superadmin' && userRole !== 'sales'}>
-													<span
-														className={formData.studentStatus ? 'text-foreground' : 'text-muted-foreground'}>
-														{formData.studentStatus
-															? STUDENT_STATUS.find((status) => status.value === formData.studentStatus)
-																	?.label || 'Select Status'
-															: 'Select Status'}
-													</span>
-													{(userRole === 'superadmin' || userRole === 'sales') && (
-														<ChevronDown className='h-4 w-4' />
-													)}
-												</button>
-
-												{showDropdowns.studentStatus &&
-													(userRole === 'superadmin' || userRole === 'sales') && (
-														<div className='absolute z-50 top-full mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
-															{STUDENT_STATUS.map((status) => (
-																<button
-																	key={status.value}
-																	type='button'
-																	onClick={() => handleDropdownSelect('studentStatus', status.value)}
-																	className='w-full px-3 py-2 text-left hover:bg-gray-100 text-sm'>
-																	{status.label}
-																</button>
-															))}
-														</div>
-													)}
+													<option value=''>Select Status</option>
+													{STUDENT_STATUS.map((status) => (
+														<option key={status.value} value={status.value}>
+															{status.label}
+														</option>
+													))}
+												</select>
 											</div>
 										)}
 

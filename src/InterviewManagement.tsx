@@ -823,6 +823,9 @@ const InterviewQueueSystem = () => {
 		try {
 			setError(null);
 
+			console.log('updateAdmissionStudent called with:', updatedStudent);
+			console.log('Student ID for update:', updatedStudent.id);
+
 			// Update in database
 			const { error } = await supabase
 				.from('admission_students')
@@ -861,7 +864,10 @@ const InterviewQueueSystem = () => {
 				})
 				.eq('id', updatedStudent.id);
 
-			if (error) throw error;
+			if (error) {
+				console.error('Database update error:', error);
+				throw error;
+			}
 
 			console.debug('Successfully updated admission student:', updatedStudent.nom, updatedStudent.prenom);
 
@@ -907,7 +913,7 @@ const InterviewQueueSystem = () => {
 						// Auto-mark as present when checked in by receptionist
 						presenceStatus: 'present' as const,
 						presenceCheckedAt: now,
-						presenceCheckedBy: userRole || 'receptionist'
+						presenceCheckedBy: userRole || 'receptionist',
 					});
 				}
 
@@ -1072,7 +1078,7 @@ const InterviewQueueSystem = () => {
 						// Auto-mark as present since they completed the interview
 						presenceStatus: 'present' as const,
 						presenceCheckedAt: now,
-						presenceCheckedBy: 'auto_interview_completion'
+						presenceCheckedBy: 'auto_interview_completion',
 					});
 				}
 
@@ -1578,7 +1584,7 @@ const InterviewQueueSystem = () => {
 					// Reset presence status when undoing queue entry
 					presenceStatus: 'not_checked' as const,
 					presenceCheckedAt: now,
-					presenceCheckedBy: userRole || 'system_undo'
+					presenceCheckedBy: userRole || 'system_undo',
 				});
 			}
 
@@ -1691,7 +1697,7 @@ const InterviewQueueSystem = () => {
 						// Reset presence status when removed from queue (was added by mistake)
 						presenceStatus: 'not_checked' as const,
 						presenceCheckedAt: now,
-						presenceCheckedBy: userRole || 'system_removal'
+						presenceCheckedBy: userRole || 'system_removal',
 					});
 				}
 
@@ -1865,8 +1871,8 @@ const InterviewQueueSystem = () => {
 										size='sm'
 										disabled={isLoading || !canSendToRoom}
 										className={`transition-colors duration-200 ${
-											canSendToRoom 
-												? 'bg-green-600 hover:bg-green-700 text-white' 
+											canSendToRoom
+												? 'bg-green-600 hover:bg-green-700 text-white'
 												: 'bg-gray-400 text-gray-600 cursor-not-allowed'
 										}`}>
 										Send to {professor.room}
@@ -1966,7 +1972,7 @@ const InterviewQueueSystem = () => {
 						// Reset presence status when completely deleting student
 						presenceStatus: 'not_checked' as const,
 						presenceCheckedAt: now,
-						presenceCheckedBy: userRole || 'system_deletion'
+						presenceCheckedBy: userRole || 'system_deletion',
 					});
 				}
 
@@ -2258,7 +2264,7 @@ const InterviewQueueSystem = () => {
 		const isReadOnly = userRole
 			? readOnlyRoles.includes(userRole as 'professor' | 'sales' | 'test_manager')
 			: false;
-		
+
 		// Only superadmin and receptionist can send students to rooms
 		const canSendToRoom = userRole === 'superadmin' || userRole === 'receptionist';
 
@@ -3212,10 +3218,7 @@ const InterviewQueueSystem = () => {
 							/>
 						)}
 						{currentView === 'my-students' && userRole === 'sales' && (
-							<SalesStudentManagement
-								students={admissionStudents}
-								salesPersonId={salesId ?? undefined}
-							/>
+							<SalesStudentManagement students={admissionStudents} salesPersonId={salesId ?? undefined} />
 						)}
 						{currentView === 'administration' && <AdministrationView students={admissionStudents} />}
 						{currentView === 'test-management' && (
