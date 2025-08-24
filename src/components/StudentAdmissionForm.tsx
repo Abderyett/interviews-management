@@ -307,6 +307,8 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 	});
 
 	const [showDropdowns, setShowDropdowns] = useState({
+		specialite: false,
+		salesPerson: false,
 		testRequired: false,
 		interviewStatus: false,
 		date: false,
@@ -726,7 +728,7 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 				cell: ({ row }) => getSalesPersonName(row.original.salesPersonId),
 			},
 		],
-		[userRole, salesPersonId]
+		[userRole, salesPersonId, hasCompletedInterview]
 	);
 
 	const handleSubmit = async (e: React.FormEvent) => {
@@ -862,11 +864,6 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 		setError(null);
 	};
 
-	const handleDropdownSelect = (field: string, value: string) => {
-		setFormData((prev) => ({ ...prev, [field]: value }));
-		setShowDropdowns((prev) => ({ ...prev, [field]: false }));
-	};
-
 	const handleDeleteClick = (student: AdmissionStudent) => {
 		setStudentToDelete(student);
 		setShowDeleteModal(true);
@@ -925,12 +922,8 @@ export const StudentAdmissionForm: React.FC<StudentAdmissionFormProps> = ({
 				setShowDropdowns((prev) => ({
 					...prev,
 					date: false,
-					bacType: false,
-					anneeBac: false,
 					specialite: false,
-					validation: false,
 					salesPerson: false,
-					studentStatus: false,
 					testRequired: false,
 					interviewStatus: false,
 				}));
