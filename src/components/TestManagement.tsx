@@ -99,9 +99,9 @@ const TestManagement: React.FC<TestManagementProps> = ({
 	students,
 	onUpdateStudent,
 	selectedDate,
-	interviewData: _, // Keep for future interview integration
 	userRole,
 	onDateChange
+	// interviewData omitted - keeping for future interview integration
 }) => {
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [searchTerm, setSearchTerm] = useState('');
